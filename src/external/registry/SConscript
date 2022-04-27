@@ -1,0 +1,49 @@
+# -*- mode: python -*-
+
+Import('env')
+
+env = env.Clone()
+
+env.Library(
+    target='registry',
+    source=[
+        'registry.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        'endpoint'
+    ]
+)
+
+env.Library(
+    target='endpoint_commands',
+    source=[
+        'endpoint_commands.cpp',
+        'endpoint_commands.idl'
+    ],
+    LIBDEPS_PRIVATE=[
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/client/clientdriver_minimal',
+        '$BUILD_DIR/mongo/db/commands',
+        '$BUILD_DIR/mongo/idl/basic_types',
+        '$BUILD_DIR/mongo/idl/idl_parser',
+        '$BUILD_DIR/mongo/util/net/http_client',
+        'endpoint',
+        'registry'
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers',
+    ]
+)
+
+env.Library(
+    target='endpoint',
+    source=[
+        'endpoint.cpp',
+    ],
+    LIBDEPS_PRIVATE=[
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/util/net/http_client'
+    ]
+)
