@@ -53,7 +53,7 @@ Endpoint* getEndpointFromCommand(const RegisterEndpoint& cmd) {
     std::vector<std::string> httpHeaders;
     auto inputHeaders = cmd.getHttpHeaders();
 
-    for (auto& headerElem : *inputHeaders){
+    for (auto& headerElem : inputHeaders){
         httpHeaders.push_back(headerElem.toString());
     }
 

@@ -62,7 +62,9 @@ public:
       _method(method),
       _httpHeaders(httpHeaders),
       _requestEncoding(requestEncoding),
-      _responseEncoding(responseEncoding) {};
+      _responseEncoding(responseEncoding) {
+          _httpClient->setHeaders(httpHeaders);
+      };
 
     BSONObj sendHttpRequest(BSONObj payload);
 

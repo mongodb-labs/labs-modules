@@ -64,12 +64,12 @@ commands:
             httpHeaders:
                 description: "Headers to be used in the request"
                 type: array<string>
-                optional: true
+                optional: false
             requestEncoding:
                 description: "Request encoding to be used in the request"
                 type: string
-                default: JSON
+                default: '"JSON"'
             responseEncoding:
                 description: "Response encoding to be used in the request"
                 type: string
-                default: JSON
+                default: '"JSON"'
