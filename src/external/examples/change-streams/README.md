@@ -52,4 +52,6 @@ mongo --authenticationDatabase admin -u admin -p pass < generate-credit-card-app
 
 
 ### Result
+The result of the API call is stored in fullDocument. See below as a reference.
+
 ![Alt text](./change-stream-example.gif?raw=true "change stream example")
