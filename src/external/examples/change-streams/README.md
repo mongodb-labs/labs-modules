@@ -10,7 +10,7 @@ After this is done, please run the mock API Docker container:
 docker run -d -p 5001:5001 steve18201/mock-ml-api
 ```
 
-This should expose port 5001 to the /mock_fraud endpoint.
+This should expose port 5001 and the /mock_fraud endpoint.
 
 ### Usage
 The first step is to listen to the change stream for changes. To do this, run the below command.
