@@ -50,6 +50,7 @@ After this is successful, we need to generate some data:
 mongo --authenticationDatabase admin -u admin -p pass < generate-credit-card-application-data.js
 ```
 
+The data randomly generates a credit card application and includes gender, education, family and other pieces of metadata usually associated with an application.
 
 ### Result
 The result of the API call is stored in fullDocument. See below as a reference.
