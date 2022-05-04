@@ -52,4 +52,4 @@ mongo --authenticationDatabase admin -u admin -p pass < generate-credit-card-app
 
 
 ### Result
-![Alt text](/change-stream-example.gif?raw=true "change stream example")
+![Alt text](./change-stream-example.gif?raw=true "change stream example")
