@@ -4,7 +4,7 @@
 
 Please refer to the root README on mongod installation instructions.
 
-After this is down, please run the mock API Docker container:
+After this is done, please run the mock API Docker container:
 
 ```sh
 docker run -d -p 5001:5001 steve18201/mock-ml-api
