@@ -33,6 +33,10 @@ const pipeline = [
 db.collection.aggregate(pipeline);
 ```
 
+```sh
+mongo --authenticationDatabase admin -u admin -p pass < aggregation-pipeline.js.js
+```
+
 ### Result
 
 ![Alt text](./batch-example.png?raw=true "batch example")
