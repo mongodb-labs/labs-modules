@@ -1,12 +1,10 @@
-use test-db
-
-db.collection.drop();
+use test-stream-db
 
 // Testing basic GET request in change streams
 assert.commandWorked(db.adminCommand({
 	"registerEndpoint": "get-fraud",
 	"endpoint": "http://localhost:5001/mock_fraud",
-	"method": "GET",
+	"method": "POST",
 	"httpHeaders": [],
 	"as": "response",
 	"requestEncoding": "JSON",

@@ -1,15 +1,17 @@
-use test-db
+use test-stream-db
+
+db.collection.drop();
 
 function createDocument() {
   let id = ''
-  let genderOptions = ['MALE', 'FEMALE']
+  let genderOptions = ['male', 'female']
   let ownsCarOptions = [true, false]
   let ownsRealEstateOptions = [true, false]
-  let eductionOptions = ["High School", "College", "University", "None"]
-  let familyOptions = ["Married", "Single"]
+  let eductionOptions = ["high school", "college", "university", "none"]
+  let familyOptions = ["married", "single"]
 
-  var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  var charactersLength = characters.length
+  let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let charactersLength = characters.length
   for ( var i = 0; i < 8; i++ ) {
     id += characters.charAt(Math.floor(Math.random() * charactersLength))
  }
