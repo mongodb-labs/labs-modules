@@ -14,7 +14,29 @@ The $external stage provides a way for the aggregation pipeline to make calls to
 - Any complex computation on documents
 
 ### Change Stream Support
-TBD. It is currently being tracked in this Jira ticket: https://jira.mongodb.org/browse/LABS-303
+Change streams is also supported. Simply register an endpoint (see below) and use it in a change stream pipeline. More information in the examples folder.
+
+Change stream documentation here: https://www.mongodb.com/docs/manual/changeStreams/
+
+```sh
+const pipeline = [
+  { $external: {name: "get-fraud"}},
+	{
+		$addFields: {
+			 "fullDocument.response": "$response"
+		}
+ 	},
+	{ $project: {"response": 0}},
+];
+
+const watchCursor = db.collection.watch(pipeline);
+
+while (!watchCursor.isExhausted()){
+  if (watchCursor.hasNext()){
+     printjson(watchCursor.next());
+  }
+}
+```
 
 ### Usage
 

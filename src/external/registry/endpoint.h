@@ -64,6 +64,7 @@ public:
       _requestEncoding(requestEncoding),
       _responseEncoding(responseEncoding) {
           _httpClient->setHeaders(httpHeaders);
+          _httpClient->allowInsecureHTTP(true);
       };
 
     BSONObj sendHttpRequest(BSONObj payload);

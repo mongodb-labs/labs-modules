@@ -48,8 +48,7 @@ public:
     static boost::intrusive_ptr<DocumentSource> createFromBson(
         BSONElement elem, const boost::intrusive_ptr<ExpressionContext>& pExpCtx);
 
-
-    StageConstraints constraints(Pipeline::SplitState pipeState) const final {
+    StageConstraints constraints(Pipeline::SplitState pipeState) const override {
         return {StreamType::kStreaming,
                 PositionRequirement::kNone,
                 HostTypeRequirement::kNone,
@@ -57,7 +56,8 @@ public:
                 FacetRequirement::kAllowed,
                 TransactionRequirement::kAllowed,
                 LookupRequirement::kAllowed,
-                UnionRequirement::kAllowed};
+                UnionRequirement::kAllowed,
+                ChangeStreamRequirement::kAllowlist};
     }
 
     const char* getSourceName() const final {

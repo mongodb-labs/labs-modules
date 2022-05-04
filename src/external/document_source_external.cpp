@@ -78,8 +78,20 @@ DocumentSource::GetNextResult DocumentSourceExternal::doGetNext() {
 
     BSONObj newObj = builder.done();
 
+    // The output doc is the same as the input doc, with the added fields.
+    MutableDocument output;
+
+    output.newStorageWithBson(newObj, false);
+
+    // TODO: maybe a cheaper way to transfer ownership to MutableDoc
+    output.makeOwned();
+
+    // Pass through the metadata.
+    output.copyMetaDataFrom(currentDoc);
+    Document outputDoc = output.freeze();
+
     // Create new Document from newly constructed BSONObj and return
-    return DocumentSource::GetNextResult(Document(newObj));
+    return DocumentSource::GetNextResult(std::move(outputDoc));
 }
 
 Value DocumentSourceExternal::serialize(boost::optional<ExplainOptions::Verbosity> explain) const {
