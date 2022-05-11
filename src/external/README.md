@@ -20,13 +20,21 @@ Change stream documentation here: https://www.mongodb.com/docs/manual/changeStre
 
 ```sh
 const pipeline = [
-  { $external: {name: "get-fraud"}},
-	{
-		$addFields: {
-			 "fullDocument.response": "$response"
-		}
- 	},
-	{ $project: {"response": 0}},
+   {
+      "$external":{
+         "name":"get-fraud"
+      }
+   },
+   {
+      "$addFields":{
+         "fullDocument.response":"$response"
+      }
+   },
+   {
+      "$project":{
+         "response":0
+      }
+   }
 ];
 
 const watchCursor = db.collection.watch(pipeline);
