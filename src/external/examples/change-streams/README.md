@@ -35,13 +35,21 @@ assert.commandWorked(db.adminCommand({
 
 // Use $external and then basic data reshaping
 const pipeline = [
-  { $external: {name: "get-fraud"}},
-	{
-		$addFields: {
-			 "fullDocument.response": "$response"
-		}
- 	},
-	{ $project: {"response": 0}},
+   {
+      "$external":{
+         "name":"get-fraud"
+      }
+   },
+   {
+      "$addFields":{
+         "fullDocument.response":"$response"
+      }
+   },
+   {
+      "$project":{
+         "response":0
+      }
+   }
 ];
 ```
 
