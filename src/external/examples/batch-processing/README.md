@@ -34,7 +34,7 @@ db.collection.aggregate(pipeline);
 ```
 
 ```sh
-mongo --authenticationDatabase admin -u admin -p pass < aggregation-pipeline.js.js
+mongo --authenticationDatabase admin -u admin -p pass < aggregation-pipeline.js
 ```
 
 ### Result
