@@ -1,0 +1,87 @@
+# -*- mode: python -*-
+
+Import('env')
+
+env = env.Clone()
+
+# TODO: Combine all libs into a single one
+
+env.Library(
+    target='stream_controller',
+    source=[
+        'stream_controller.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline'
+    ]
+)
+
+env.Library(
+    target='document_source_stream',
+    source=[
+        'document_source_stream.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+        '/usr/local/lib/cppkafka',
+        'document_source_in',
+        'document_source_stream_commit',
+        'document_source_stream_controller',
+        'stream_controller'
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers',
+    ]
+)
+
+env.Library(
+    target='document_source_in',
+    source=[
+        'document_source_in.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+        '/usr/local/lib/cppkafka'
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers'
+    ]
+)
+
+env.Library(
+    target='document_source_stream_controller',
+    source=[
+        'document_source_stream_controller.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+        'stream_controller'
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers',
+    ]
+)
+
+env.Library(
+    target='document_source_stream_commit',
+    source=[
+        'document_source_stream_commit.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+        # '/usr/include/librdkafka',
+        '/usr/local/lib/cppkafka'
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers',
+    ]
+)
