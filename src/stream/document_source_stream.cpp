@@ -73,8 +73,6 @@ DocumentSourceStream::DocumentSourceStream(
         _pipeline->addFinalSource(
             DocumentSourceStreamCommit::create(pExpCtx, _consumer)
         );
-
-        //TODO: clean up of StreamController, consumer -> shared pointer? Memory leak.
 }
 
 
