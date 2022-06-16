@@ -59,24 +59,26 @@ DocumentSource::GetNextResult DocumentSourceStreamCommit::doGetNext() {
     }
 
     if (nextInput.isUnblock()) {
-        auto message = doc.metadata().getStreamMessage();
+        // if (doc.metadata().hasStreamMessage()) {
+        //     auto message = doc.metadata().getStreamMessage();
 
-        _consumer->commit(*message);
+        //     _consumer->commit(*message);
 
-        std::string topicName = "json-quickstart";
-        int partition = message->get_partition();
-        int64_t offset = message->get_offset();
+        //     std::string topicName = "json-quickstart";
+        //     int partition = message->get_partition();
+        //     int64_t offset = message->get_offset();
 
 
-        cppkafka::TopicPartitionList list = {cppkafka::TopicPartition(topicName, message->get_partition())};
+        //     cppkafka::TopicPartitionList list = {cppkafka::TopicPartition(topicName, message->get_partition())};
 
-        cppkafka::TopicPartitionList _offsetsCommitted = _consumer->get_offsets_committed(list);
+        //     cppkafka::TopicPartitionList _offsetsCommitted = _consumer->get_offsets_committed(list);
 
-        invariant(_offsetsCommitted[0].get_topic() == topicName);
-        invariant(_offsetsCommitted[0].get_partition() == partition);
-        invariant(_offsetsCommitted[0].get_offset() == offset + 1);
+        //     invariant(_offsetsCommitted[0].get_topic() == topicName);
+        //     invariant(_offsetsCommitted[0].get_partition() == partition);
+        //     invariant(_offsetsCommitted[0].get_offset() == offset + 1);
 
-        LOGV2(999999, "Successful commit", "topic"_attr = _resultList[0].get_topic(), "partition"_attr = _resultList[0].get_partition(), "offset"_attr = _resultList[0].get_offset());
+        //     LOGV2(999999, "Successful commit", "topic"_attr = _offsetsCommitted[0].get_topic(), "partition"_attr = _offsetsCommitted[0].get_partition(), "offset"_attr = _offsetsCommitted[0].get_offset());
+        // }
     }
 
     return nextInput;

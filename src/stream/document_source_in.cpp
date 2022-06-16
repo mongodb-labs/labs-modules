@@ -83,7 +83,15 @@ DocumentSource::GetNextResult DocumentSourceIn::doGetNext() {
             LOGV2(999999, "Received Kafka payload", "payload"_attr = payload, "offset"_attr=offset);
 
             // Convert string to BSONObj
-            BSONObj obj = fromjson(payload);
+
+            BSONObj obj;
+
+            try {
+                obj = fromjson(payload);
+            } catch (std::exception&) {
+                // Message could not be parsed to JSON.
+                return GetNextResult::makePauseExecution();
+            }
 
             // Create new BSON with response
             BSONObjBuilder builder = BSONObjBuilder();

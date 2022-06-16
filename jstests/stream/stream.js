@@ -1,6 +1,6 @@
 use output
 
-db.test.drop();
+db.streamA.drop();
 
 const agg = [
   {
@@ -15,17 +15,23 @@ const agg = [
             format: "json", // or text
           }
         }
-      },
-      {
-        $out: {
-          db: "output",
-          coll: "test"
-        }
       }
+      // {
+      //   $out: {
+      //     db: "output",
+      //     coll: "test"
+      //   }
+      // }
     ]
   }
 ];
 
-db.collection.aggregate(agg)
+db.createStream("streamA", agg)
 
-db.test.find()
+// db.system.views.find()
+
+// show collections
+
+// db.collection.aggregate(agg)
+
+// db.test.find()

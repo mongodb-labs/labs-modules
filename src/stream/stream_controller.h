@@ -29,4 +29,5 @@ private:
 
     Document _lastResult;
 };
-}
+
+}  // namespace mongo

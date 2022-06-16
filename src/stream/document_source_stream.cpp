@@ -117,6 +117,9 @@ boost::intrusive_ptr<DocumentSourceStream> DocumentSourceStream::create(
 boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
     BSONElement elem, const boost::intrusive_ptr<ExpressionContext>& pExpCtx) {
 
+
+    LOGV2(999999, "Creating $stream stage");
+
     uassert(40170,
             str::stream() << "arguments to $stream must be arrays, is type "
                             << typeName(elem.type()),

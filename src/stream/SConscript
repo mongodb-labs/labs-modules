@@ -77,7 +77,6 @@ env.Library(
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        # '/usr/include/librdkafka',
         '/usr/local/lib/cppkafka'
     ],
     LIBDEPS_DEPENDENTS=[

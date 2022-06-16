@@ -30,10 +30,6 @@
 #pragma once
 #include <cppkafka/cppkafka.h>
 
-// extern "C" {
-// #include <librdkafka/rdkafka.h>
-// }
-
 #include "mongo/db/pipeline/document_source.h"
 
 namespace mongo {
