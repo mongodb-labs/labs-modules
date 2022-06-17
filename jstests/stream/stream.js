@@ -2,6 +2,8 @@ use output
 
 db.streamA.drop();
 
+db.test.drop();
+
 const agg = [
   {
     $stream: [
@@ -15,13 +17,15 @@ const agg = [
             format: "json", // or text
           }
         }
+      },
+      {
+        $merge: {
+          into: {
+            db: "output",
+            coll: "test"
+          }
+        }
       }
-      // {
-      //   $out: {
-      //     db: "output",
-      //     coll: "test"
-      //   }
-      // }
     ]
   }
 ];

@@ -5,11 +5,6 @@ Import("env has_option")
 Import("get_option")
 Import("http_client")
 
-# feature_dirs = [
-#     "external",
-#     "stream"
-# ]
-
 env = env.Clone()
 
 env.InjectMongoIncludePaths()
