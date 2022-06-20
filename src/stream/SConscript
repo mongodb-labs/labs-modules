@@ -6,6 +6,12 @@ env = env.Clone()
 
 # TODO: Combine all libs into a single one
 
+env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = 1
+
+env.Append(LINKFLAGS=[
+    '-Wl,-rpath,/usr/lib'
+])
+
 env.Library(
     target='stream_controller',
     source=[
@@ -25,7 +31,7 @@ env.Library(
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        '/usr/local/lib/cppkafka',
+        '/usr/lib/cppkafka',
         'document_source_in',
         'document_source_stream_commit',
         'document_source_stream_controller',
@@ -45,7 +51,7 @@ env.Library(
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        '/usr/local/lib/cppkafka'
+        '/usr/lib/cppkafka'
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
@@ -77,7 +83,7 @@ env.Library(
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        '/usr/local/lib/cppkafka'
+        '/usr/lib/cppkafka'
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
