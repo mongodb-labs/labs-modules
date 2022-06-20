@@ -90,3 +90,36 @@ env.Library(
         '$BUILD_DIR/mongo/s/mongos_initializers',
     ]
 )
+
+env.Library(
+    target='document_source_stream_exp_window',
+    source=[
+        'document_source_stream_exp_window.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+    ]
+)
+
+env.Library(
+    target='document_source_stream_simp_time_window',
+    source=[
+        'document_source_stream_simp_time_window.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+    ]
+)
+
+env.Library(
+    target='document_source_stream_random_delay',
+    source=[
+        'document_source_stream_random_delay.cpp'
+    ],
+    LIBDEPS_PRIVATE= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+    ]
+)
