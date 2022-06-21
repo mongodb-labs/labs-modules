@@ -13,7 +13,7 @@ const agg = [
           name: "kafkaUserBehavior",
           connectionConfig: {
             booststrapServer: "localhost:9092",
-            topic: "json-quickstart",
+            topic: "quickstart",
             format: "json", // or text
           }
         }
