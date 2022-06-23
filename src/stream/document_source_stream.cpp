@@ -157,6 +157,8 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
       kafkaTopic = connectionConfigObj.getField("topic").str();
       kafkaTopicFormat = connectionConfigObj.getField("format").str();
 
+      LOGV2(999999, "pExpCtx->uuid->toString()",
+            "value"_attr = pExpCtx->uuid->toString());
       kafkaConfig = {{"bootstrap.servers", bootstrapServer},
                      // Change to catalog UUID once we have this
                      {"group.id", pExpCtx->uuid->toString()},
