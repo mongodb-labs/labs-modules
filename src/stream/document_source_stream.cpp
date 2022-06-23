@@ -152,20 +152,25 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
       auto connectionConfigObj = connectionConfig.Obj();
 
       // TODO: Need to do input validation for each of these steps.
-      auto booststrapServer =
-          connectionConfigObj.getField("booststrapServer").str();
+      auto bootstrapServer =
+          connectionConfigObj.getField("bootstrapServer").str();
       kafkaTopic = connectionConfigObj.getField("topic").str();
       kafkaTopicFormat = connectionConfigObj.getField("format").str();
 
-      kafkaConfig = {{"bootstrap.servers", booststrapServer},
+      kafkaConfig = {{"bootstrap.servers", bootstrapServer},
                      // Change to catalog UUID once we have this
                      {"group.id", pExpCtx->uuid->toString()},
                      // Disable auto commit
                      {"enable.auto.commit", false},
                      {"auto.offset.reset", "beginning"}};
-    }
+    } else if (embeddedObject.hasField("$metadata")) {
+      BSONElement metadataElem = subPipeElem.Obj().getField("$metadata");
+      BSONObj metadataObj = metadataElem.Obj();
 
-    if (!embeddedObject.hasField("$in")) {
+      // TODO: pass metadata into $stream such as system.streams doc UUID and
+      // stream name
+      //  Need to use this as a group_id
+    } else {
       // Do not insert $in as it will be added in manually
       rawPipeline.push_back(embeddedObject);
     }
