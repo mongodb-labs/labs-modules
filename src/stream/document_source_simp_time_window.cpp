@@ -42,11 +42,12 @@ REGISTER_DOCUMENT_SOURCE(simpTWindow, LiteParsedDocumentSourceDefault::parse,
 intrusive_ptr<DocumentSource> DocumentSourceSimpTWindow::createFromBson(
     BSONElement elem, const intrusive_ptr<ExpressionContext> &expCtx) {
   LOGV2(99999, "Create simpTWindow: ", "arg"_attr = elem);
+  const auto dura = elem.parseIntegerElementToNonNegativeLong();
   uassert(99999,
           str::stream() << "the duration field must be an integer, got: "
                         << typeName(elem.type()),
-          elem.type() == NumberInt);
-  auto duration = elem.numberInt();
+          dura.isOK());
+  auto duration = dura.getValue();
   auto runner = makePeriodicRunner(expCtx->opCtx->getServiceContext());
   intrusive_ptr<DocumentSourceSimpTWindow> simpTWinStage(
       new DocumentSourceSimpTWindow(expCtx, duration, std::move(runner)));
