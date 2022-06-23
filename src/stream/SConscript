@@ -92,34 +92,48 @@ env.Library(
 )
 
 env.Library(
-    target='document_source_stream_exp_window',
+    target='document_source_exp_window',
     source=[
-        'document_source_stream_exp_window.cpp'
+        'document_source_exp_window.cpp'
     ],
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers',
     ]
 )
 
 env.Library(
-    target='document_source_stream_simp_time_window',
+    target='document_source_simp_time_window',
     source=[
-        'document_source_stream_simp_time_window.cpp'
+        'document_source_simp_time_window.cpp'
     ],
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
+        '$BUILD_DIR/mongo/util/periodic_runner',
+        '$BUILD_DIR/mongo/util/periodic_runner_factory',
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers',
     ]
 )
 
 env.Library(
-    target='document_source_stream_random_delay',
+    target='document_source_random_delay',
     source=[
-        'document_source_stream_random_delay.cpp'
+        'document_source_random_delay.cpp'
     ],
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
+    ],
+    LIBDEPS_DEPENDENTS=[
+        '$BUILD_DIR/mongo/db/mongod_initializers',
+        '$BUILD_DIR/mongo/s/mongos_initializers',
     ]
 )

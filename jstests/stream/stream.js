@@ -19,6 +19,9 @@ const agg = [
         }
       },
       {
+        $simpTWindow: 5000
+      },
+      {
         $merge: {
           into: {
             db: "output",

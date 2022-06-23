@@ -36,168 +36,164 @@
 #include "mongo/logv2/log.h"
 #include "mongo/platform/basic.h"
 
+#include "document_source_in.h"
 #include "document_source_stream.h"
 #include "document_source_stream_commit.h"
 #include "document_source_stream_controller.h"
-#include "document_source_in.h"
 
 namespace mongo {
 
 DocumentSourceStream::DocumentSourceStream(
-    const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
+    const boost::intrusive_ptr<ExpressionContext> &pExpCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
-    const cppkafka::Configuration kafkaConfig,
-    const std::string kafkaTopic,
+    const cppkafka::Configuration kafkaConfig, const std::string kafkaTopic,
     const std::string kafkaTopicFormat)
-    : DocumentSource(kStageName, pExpCtx),
-     _pipeline(std::move(pipeline)),
-     _streamController(new StreamController()),
-     _consumer(new cppkafka::Consumer(kafkaConfig)) {
-        // Insert $streamController as initial source
-        _streamController->setSource(
-            DocumentSourceIn::create(pExpCtx, _consumer, kafkaTopic, kafkaTopicFormat)
-        );
+    : DocumentSource(kStageName, pExpCtx), _pipeline(std::move(pipeline)),
+      _streamController(new StreamController()),
+      _consumer(new cppkafka::Consumer(kafkaConfig)) {
+  // Insert $streamController as initial source
+  _streamController->setSource(DocumentSourceIn::create(
+      pExpCtx, _consumer, kafkaTopic, kafkaTopicFormat));
 
-        _pipeline->addInitialSource(
-            DocumentSourceStreamController::create(pExpCtx, _streamController)
-        );
+  _pipeline->addInitialSource(
+      DocumentSourceStreamController::create(pExpCtx, _streamController));
 
-        /*
-        * Add $streamCommit to end
-        * Agg pipeline shoud look like:
-        * [$in] => [$streamController] => [Regular Agg] => [$streamCommit]
-        * Previous:
-        * [$in] => [Regular Agg]
-        */
+  /*
+   * Add $streamCommit to end
+   * Agg pipeline shoud look like:
+   * [$in] => [$streamController] => [Regular Agg] => [$streamCommit]
+   * Previous:
+   * [$in] => [Regular Agg]
+   */
 
-        _pipeline->addFinalSource(
-            DocumentSourceStreamCommit::create(pExpCtx, _consumer)
-        );
+  _pipeline->addFinalSource(
+      DocumentSourceStreamCommit::create(pExpCtx, _consumer));
 }
 
-
 // Macro to register the document source.
-REGISTER_DOCUMENT_SOURCE(stream,
-                         LiteParsedDocumentSourceDefault::parse,
+REGISTER_DOCUMENT_SOURCE(stream, LiteParsedDocumentSourceDefault::parse,
                          DocumentSourceStream::createFromBson,
                          AllowedWithApiStrict::kAlways);
 
 DocumentSource::GetNextResult DocumentSourceStream::doGetNext() {
-    bool pipelineEOF = false;
+  bool pipelineEOF = false;
 
-    while(!pipelineEOF) {
-        auto input = _pipeline->getSources().back()->getNext();
-        pipelineEOF = input.isEOF();
-    }
+  while (!pipelineEOF) {
+    auto input = _pipeline->getSources().back()->getNext();
+    pipelineEOF = input.isEOF();
+  }
 
-    return GetNextResult::makeEOF();
+  return GetNextResult::makeEOF();
 }
 
-Value DocumentSourceStream::serialize(boost::optional<ExplainOptions::Verbosity> explain) const {
-    MutableDocument insides;
+Value DocumentSourceStream::serialize(
+    boost::optional<ExplainOptions::Verbosity> explain) const {
+  MutableDocument insides;
 
-    // TODO.
+  // TODO.
 
-    return Value{Document{{getSourceName(), insides.freezeToValue()}}};
+  return Value{Document{{getSourceName(), insides.freezeToValue()}}};
 }
-
 
 boost::intrusive_ptr<DocumentSourceStream> DocumentSourceStream::create(
-    const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
+    const boost::intrusive_ptr<ExpressionContext> &pExpCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
-    const cppkafka::Configuration kafkaConfig,
-    const std::string kafkaTopic,
+    const cppkafka::Configuration kafkaConfig, const std::string kafkaTopic,
     const std::string kafkaTopicFormat) {
-    boost::intrusive_ptr<DocumentSourceStream> source(new DocumentSourceStream(
-        pExpCtx, std::move(pipeline), kafkaConfig, kafkaTopic, kafkaTopicFormat));
-    return source;
+  boost::intrusive_ptr<DocumentSourceStream> source(new DocumentSourceStream(
+      pExpCtx, std::move(pipeline), kafkaConfig, kafkaTopic, kafkaTopicFormat));
+  return source;
 };
 
-
 boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
-    BSONElement elem, const boost::intrusive_ptr<ExpressionContext>& pExpCtx) {
+    BSONElement elem, const boost::intrusive_ptr<ExpressionContext> &pExpCtx) {
 
+  LOGV2(999999, "Creating $stream stage");
 
-    LOGV2(999999, "Creating $stream stage");
+  uassert(40170,
+          str::stream() << "arguments to $stream must be arrays, is type "
+                        << typeName(elem.type()),
+          elem.type() == BSONType::Array);
 
-    uassert(40170,
-            str::stream() << "arguments to $stream must be arrays, is type "
+  std::vector<BSONObj> rawPipeline;
+
+  cppkafka::Configuration kafkaConfig;
+  std::string kafkaTopic;
+  std::string kafkaTopicFormat;
+  int i = 0;
+
+  for (auto &&subPipeElem : elem.Obj()) {
+    uassert(
+        99999999,
+        str::stream() << "elements of arrays in $stream spec must be non-empty "
+                         "objects, argument contained an element of type "
+                      << typeName(subPipeElem.type()) << ": " << subPipeElem,
+        subPipeElem.type() == BSONType::Object);
+
+    auto embeddedObject = subPipeElem.embeddedObject();
+    LOGV2(99999, "embeddedObject: ", "embdObj"_attr = embeddedObject);
+    uassert(99999999,
+            str::stream() << "$in can only be the first stage in the pipeline",
+            !(embeddedObject.hasField("$in") && i != 0));
+
+    if (embeddedObject.hasField("$in")) {
+      BSONElement inArgElem = subPipeElem.Obj().getField("$in");
+
+      BSONObj argObj = inArgElem.Obj();
+
+      auto connectionConfig = argObj.getField("connectionConfig");
+
+      uassert(100029201,
+              str::stream() << "The connectionConfig argument to $stream must "
+                               "be an object, but found type: "
                             << typeName(elem.type()),
-            elem.type() == BSONType::Array);
+              connectionConfig.type() == BSONType::Object);
 
-    std::vector<BSONObj> rawPipeline;
+      auto connectionConfigObj = connectionConfig.Obj();
 
-    cppkafka::Configuration kafkaConfig;
-    std::string kafkaTopic;
-    std::string kafkaTopicFormat;
-    int i = 0;
+      // TODO: Need to do input validation for each of these steps.
+      auto booststrapServer =
+          connectionConfigObj.getField("booststrapServer").str();
+      kafkaTopic = connectionConfigObj.getField("topic").str();
+      kafkaTopicFormat = connectionConfigObj.getField("format").str();
 
-    for (auto&& subPipeElem : elem.Obj()) {
-        uassert(99999999,
-                str::stream() << "elements of arrays in $stream spec must be non-empty objects, argument contained an element of type "
-                                << typeName(subPipeElem.type()) << ": " << subPipeElem,
-                subPipeElem.type() == BSONType::Object);
-
-        uassert(99999999,
-                str::stream() << "$in can only be the first stage in the pipeline",
-                !(subPipeElem.embeddedObject().hasField("$in") &&
-                  i != 0));
-
-        if (subPipeElem.embeddedObject().hasField("$in")) {
-            BSONElement inArgElem = subPipeElem.Obj().getField("$in");
-
-            BSONObj argObj = inArgElem.Obj();
-
-            auto connectionConfig = argObj.getField("connectionConfig");
-
-            uassert(100029201,
-                    str::stream() << "The connectionConfig argument to $stream must be an object, but found type: "
-                                << typeName(elem.type()),
-                    connectionConfig.type() == BSONType::Object);
-
-            auto connectionConfigObj = connectionConfig.Obj();
-
-            //TODO: Need to do input validation for each of these steps.
-            auto booststrapServer = connectionConfigObj.getField("booststrapServer").str();
-            kafkaTopic = connectionConfigObj.getField("topic").str();
-            kafkaTopicFormat = connectionConfigObj.getField("format").str();
-
-            kafkaConfig = {
-                { "bootstrap.servers", booststrapServer },
-                // Change to catalog UUID once we have this
-                { "group.id", pExpCtx->uuid->toString() },
-                // Disable auto commit
-                { "enable.auto.commit", false },
-                { "auto.offset.reset", "beginning"}
-            };
-        }
-
-        if (!subPipeElem.embeddedObject().hasField("$in")) {
-            // Do not insert $in as it will be added in manually
-            rawPipeline.push_back(subPipeElem.embeddedObject());
-        }
-        i++;
+      kafkaConfig = {{"bootstrap.servers", booststrapServer},
+                     // Change to catalog UUID once we have this
+                     {"group.id", pExpCtx->uuid->toString()},
+                     // Disable auto commit
+                     {"enable.auto.commit", false},
+                     {"auto.offset.reset", "beginning"}};
     }
 
-    auto pipeline = Pipeline::parse(rawPipeline, pExpCtx, [](const Pipeline& pipeline) {
+    if (!embeddedObject.hasField("$in")) {
+      // Do not insert $in as it will be added in manually
+      rawPipeline.push_back(embeddedObject);
+    }
+    i++;
+  }
+
+  auto pipeline =
+      Pipeline::parse(rawPipeline, pExpCtx, [](const Pipeline &pipeline) {
         auto sources = pipeline.getSources();
-        std::for_each(sources.begin(), sources.end(), [](auto& stage) {
-            // TODO: Need to add in a isAllowedInStream stage constraint
+        std::for_each(sources.begin(), sources.end(), [](auto &stage) {
+          // TODO: Need to add in a isAllowedInStream stage constraint
 
-            // auto stageConstraints = stage->constraints();
+          // auto stageConstraints = stage->constraints();
 
-            // uassert(40600,
-            //         str::stream() << stage->getSourceName()
-            //                         << " is not allowed to be used within a $facet stage",
-            //         stageConstraints.isAllowedInChangeStream());
-            // // We expect a stage within a $facet stage to have these properties.
-            // invariant(stageConstraints.requiredPosition ==
-            //             StageConstraints::PositionRequirement::kNone);
-            // invariant(!stageConstraints.isIndependentOfAnyCollection);
+          // uassert(40600,
+          //         str::stream() << stage->getSourceName()
+          //                         << " is not allowed to be used within a
+          //                         $facet stage",
+          //         stageConstraints.isAllowedInChangeStream());
+          // // We expect a stage within a $facet stage to have these
+          // properties. invariant(stageConstraints.requiredPosition ==
+          //             StageConstraints::PositionRequirement::kNone);
+          // invariant(!stageConstraints.isIndependentOfAnyCollection);
         });
-    });
+      });
 
-    return DocumentSourceStream::create(pExpCtx, std::move(pipeline), kafkaConfig, kafkaTopic, kafkaTopicFormat);
+  return DocumentSourceStream::create(pExpCtx, std::move(pipeline), kafkaConfig,
+                                      kafkaTopic, kafkaTopicFormat);
 }
 
-}  // namespace mongo
+} // namespace mongo

@@ -6,7 +6,7 @@ def configure(conf, env):
     root = os.path.dirname(__file__)
 
     modules = [
-        "external",
+#        "external",
         "stream"
     ]
 
