@@ -175,6 +175,7 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
     } else {
       // Do not insert $in as it will be added in manually
       rawPipeline.push_back(embeddedObject);
+
     }
     i++;
   }

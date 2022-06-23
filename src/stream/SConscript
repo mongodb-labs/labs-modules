@@ -17,7 +17,7 @@ env.Library(
     source=[
         'stream_controller.cpp'
     ],
-    LIBDEPS_PRIVATE= [
+    LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline'
     ]
@@ -28,19 +28,22 @@ env.Library(
     source=[
         'document_source_stream.cpp'
     ],
-    LIBDEPS_PRIVATE= [
+    LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        '/usr/lib/cppkafka',
+
         'document_source_in',
         'document_source_stream_commit',
         'document_source_stream_controller',
-        'stream_controller'
+        'stream_controller',
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
         '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
+    ],
+    SYSLIBDEPS=[
+        'cppkafka',
+    ],
 )
 
 env.Library(
@@ -48,15 +51,18 @@ env.Library(
     source=[
         'document_source_in.cpp'
     ],
-    LIBDEPS_PRIVATE= [
+    LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        '/usr/lib/cppkafka'
+
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
         '$BUILD_DIR/mongo/s/mongos_initializers'
-    ]
+    ],
+    SYSLIBDEPS=[
+        'cppkafka',
+    ],
 )
 
 env.Library(
@@ -64,7 +70,7 @@ env.Library(
     source=[
         'document_source_stream_controller.cpp'
     ],
-    LIBDEPS_PRIVATE= [
+    LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
         'stream_controller'
@@ -80,15 +86,17 @@ env.Library(
     source=[
         'document_source_stream_commit.cpp'
     ],
-    LIBDEPS_PRIVATE= [
+    LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        '/usr/lib/cppkafka'
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
         '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
+    ],
+    SYSLIBDEPS=[
+        'cppkafka',
+    ],
 )
 
 env.Library(
@@ -116,6 +124,7 @@ env.Library(
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
         '$BUILD_DIR/mongo/util/periodic_runner',
         '$BUILD_DIR/mongo/util/periodic_runner_factory',
+
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
@@ -136,4 +145,5 @@ env.Library(
         '$BUILD_DIR/mongo/db/mongod_initializers',
         '$BUILD_DIR/mongo/s/mongos_initializers',
     ]
+
 )
