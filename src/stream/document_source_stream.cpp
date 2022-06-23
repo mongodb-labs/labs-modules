@@ -120,7 +120,7 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
 
     LOGV2(999999, "Creating $stream stage");
 
-    uassert(40170,
+    uassert(999999,
             str::stream() << "arguments to $stream must be arrays, is type "
                             << typeName(elem.type()),
             elem.type() == BSONType::Array);
@@ -133,12 +133,12 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
     int i = 0;
 
     for (auto&& subPipeElem : elem.Obj()) {
-        uassert(99999999,
+        uassert(999999,
                 str::stream() << "elements of arrays in $stream spec must be non-empty objects, argument contained an element of type "
                                 << typeName(subPipeElem.type()) << ": " << subPipeElem,
                 subPipeElem.type() == BSONType::Object);
 
-        uassert(99999999,
+        uassert(999999,
                 str::stream() << "$in can only be the first stage in the pipeline",
                 !(subPipeElem.embeddedObject().hasField("$in") &&
                   i != 0));
@@ -150,7 +150,7 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
 
             auto connectionConfig = argObj.getField("connectionConfig");
 
-            uassert(100029201,
+            uassert(999999,
                     str::stream() << "The connectionConfig argument to $stream must be an object, but found type: "
                                 << typeName(elem.type()),
                     connectionConfig.type() == BSONType::Object);
@@ -158,24 +158,30 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
             auto connectionConfigObj = connectionConfig.Obj();
 
             //TODO: Need to do input validation for each of these steps.
-            auto booststrapServer = connectionConfigObj.getField("booststrapServer").str();
+            auto bootstrapServer = connectionConfigObj.getField("bootstrapServer").str();
             kafkaTopic = connectionConfigObj.getField("topic").str();
             kafkaTopicFormat = connectionConfigObj.getField("format").str();
 
+            LOGV2(999999, "pExpCtx->uuid->toString()", "value"_attr=pExpCtx->uuid->toString());
             kafkaConfig = {
-                { "bootstrap.servers", booststrapServer },
+                { "bootstrap.servers", bootstrapServer },
                 // Change to catalog UUID once we have this
                 { "group.id", pExpCtx->uuid->toString() },
                 // Disable auto commit
                 { "enable.auto.commit", false },
                 { "auto.offset.reset", "beginning"}
             };
-        }
+        } else if (subPipeElem.embeddedObject().hasField("$metadata")) {
+            BSONElement metadataElem = subPipeElem.Obj().getField("$metadata");
+            BSONObj metadataObj = metadataElem.Obj();
 
-        if (!subPipeElem.embeddedObject().hasField("$in")) {
+            //TODO: pass metadata into $stream such as system.streams doc UUID and stream name
+            // Need to use this as a group_id
+        } else {
             // Do not insert $in as it will be added in manually
             rawPipeline.push_back(subPipeElem.embeddedObject());
         }
+
         i++;
     }
 

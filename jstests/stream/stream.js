@@ -1,6 +1,8 @@
 use output
 
-db.streamA.drop();
+const streamName = 'streamD'
+
+db[streamName].drop();
 
 db.test.drop();
 
@@ -12,7 +14,7 @@ const agg = [
           connector: "kafka",
           name: "kafkaUserBehavior",
           connectionConfig: {
-            booststrapServer: "localhost:9092",
+            bootstrapServer: "localhost:9092",
             topic: "json-quickstart",
             format: "json", // or text
           }
@@ -30,9 +32,10 @@ const agg = [
   }
 ];
 
-db.createStream("streamA", agg)
+db.createStream(streamName, agg)
 
-// db.system.views.find()
+use config
+db.system.streams.find()
 
 // show collections
 
