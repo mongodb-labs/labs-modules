@@ -14,8 +14,8 @@ const agg = [
           connector: "kafka",
           name: "kafkaUserBehavior",
           connectionConfig: {
-            bootstrapServer: "localhost:9092",
-            topic: "json-quickstart",
+            booststrapServer: "localhost:9092",
+            topic: "quickstart",
             format: "json", // or text
           }
         }
