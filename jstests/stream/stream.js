@@ -1,10 +1,7 @@
-use output
+use config
 
-const streamName = 'streamD'
+const streamName = 'streamY'
 
-db[streamName].drop();
-
-db.test.drop();
 
 const agg = [
   {
@@ -21,9 +18,6 @@ const agg = [
         }
       },
       {
-        $simpTWindow: 5000
-      },
-      {
         $merge: {
           into: {
             db: "output",
@@ -37,7 +31,7 @@ const agg = [
 
 db.createStream(streamName, agg)
 
-use config
+// use config
 db.system.streams.find()
 
 // show collections
