@@ -44,7 +44,8 @@ public:
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
         const std::shared_ptr<cppkafka::Consumer> consumer,
         const std::string topic,
-        const std::string kafkaTopicFormat);
+        const std::string kafkaTopicFormat,
+        const BSONObj metadata);
 
 
     static boost::intrusive_ptr<DocumentSource> createFromBson(
@@ -76,15 +77,19 @@ private:
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
         const std::shared_ptr<cppkafka::Consumer> consumer,
         const std::string topic,
-        const std::string kafkaTopicFormat);
+        const std::string kafkaTopicFormat,
+        const BSONObj metadata);
 
     GetNextResult doGetNext() final;
+
+    boost::optional<DocumentSource::GetNextResult> _popInsertionQueueIfNotEmpty();
 
     std::shared_ptr<cppkafka::Consumer> _consumer;
 
     std::string _format;
 
-
+    mutable Mutex _mutex = MONGO_MAKE_LATCH("DocumentSourceIn::_mutex");
+    std::deque<DocumentSource::GetNextResult> _insertionQueue;
 };
 
 }  // namespace mongo
