@@ -46,14 +46,16 @@ namespace mongo {
 DocumentSourceStream::DocumentSourceStream(
     const boost::intrusive_ptr<ExpressionContext> &pExpCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
-    const cppkafka::Configuration kafkaConfig, const std::string kafkaTopic,
+    const BSONObj metadata,
+    const cppkafka::Configuration kafkaConfig,
+    const std::string kafkaTopic,
     const std::string kafkaTopicFormat)
     : DocumentSource(kStageName, pExpCtx), _pipeline(std::move(pipeline)),
       _streamController(new StreamController()),
       _consumer(new cppkafka::Consumer(kafkaConfig)) {
   // Insert $streamController as initial source
   _streamController->setSource(DocumentSourceIn::create(
-      pExpCtx, _consumer, kafkaTopic, kafkaTopicFormat));
+      pExpCtx, _consumer, kafkaTopic, kafkaTopicFormat, metadata));
 
   _pipeline->addInitialSource(
       DocumentSourceStreamController::create(pExpCtx, _streamController));
@@ -98,10 +100,12 @@ Value DocumentSourceStream::serialize(
 boost::intrusive_ptr<DocumentSourceStream> DocumentSourceStream::create(
     const boost::intrusive_ptr<ExpressionContext> &pExpCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
-    const cppkafka::Configuration kafkaConfig, const std::string kafkaTopic,
+    const BSONObj metadata,
+    const cppkafka::Configuration kafkaConfig,
+    const std::string kafkaTopic,
     const std::string kafkaTopicFormat) {
   boost::intrusive_ptr<DocumentSourceStream> source(new DocumentSourceStream(
-      pExpCtx, std::move(pipeline), kafkaConfig, kafkaTopic, kafkaTopicFormat));
+      pExpCtx, std::move(pipeline), metadata, kafkaConfig, kafkaTopic, kafkaTopicFormat));
   return source;
 };
 
@@ -209,7 +213,7 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
         });
       });
 
-  return DocumentSourceStream::create(pExpCtx, std::move(pipeline), kafkaConfig,
+  return DocumentSourceStream::create(pExpCtx, std::move(pipeline), std::move(metadataObj), kafkaConfig,
                                       kafkaTopic, kafkaTopicFormat);
 }
 

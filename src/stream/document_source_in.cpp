@@ -35,10 +35,10 @@
 #include "document_source_in.h"
 
 #include "mongo/bson/json.h"
+#include "mongo/db/commands/stream_registry.h"
+#include "mongo/db/pipeline/pipeline.h"
 #include "mongo/logv2/log.h"
 #include "mongo/platform/basic.h"
-#include "mongo/db/pipeline/pipeline.h"
-#include "mongo/bson/json.h"
 
 namespace mongo {
 
@@ -46,12 +46,22 @@ DocumentSourceIn::DocumentSourceIn(
     const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
     const std::shared_ptr<cppkafka::Consumer> consumer,
     const std::string topic,
-    const std::string format)
+    const std::string format,
+    const BSONObj metadata)
     : DocumentSource(kStageName, pExpCtx),
     _consumer(consumer),
     _format(format){
         // Subscribe to the topic
         _consumer->subscribe({ topic });
+
+        StreamListener* listener = new StreamListener([this](DocumentSource::GetNextResult document) {
+            stdx::lock_guard<Latch> lock(_mutex);
+            _insertionQueue.push_back(std::move(document));
+        });
+
+        auto streamName = metadata.getField("name").str();
+        auto stream = StreamRegistry::get()->getStream(streamName);
+        stream->addListener(listener);
     }
 
 
@@ -61,7 +71,24 @@ REGISTER_DOCUMENT_SOURCE(in,
                          DocumentSourceIn::createFromBson,
                          AllowedWithApiStrict::kAlways);
 
+boost::optional<DocumentSource::GetNextResult> DocumentSourceIn::_popInsertionQueueIfNotEmpty() {
+    // Protect _insertionQueue
+    stdx::lock_guard<Latch> lock(_mutex);
+    if (_insertionQueue.size() > 0) {
+        auto out = std::move(_insertionQueue.front());
+        _insertionQueue.pop_front();
+        return out;
+    }
+    return boost::none;
+}
+
 DocumentSource::GetNextResult DocumentSourceIn::doGetNext() {
+    if (auto entry = _popInsertionQueueIfNotEmpty()) {
+        auto entryObj = entry.get();
+        LOGV2(999999, "Received manual insertion", "payload"_attr = entryObj.getDocument().toBson());
+        return entryObj;
+    }
+
     cppkafka::Message msg = _consumer->poll();
 
     // If we managed to get a message
@@ -132,9 +159,10 @@ boost::intrusive_ptr<DocumentSourceIn> DocumentSourceIn::create(
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
         const std::shared_ptr<cppkafka::Consumer> consumer,
         const std::string topic,
-        const std::string format) {
+        const std::string format,
+        const BSONObj metadata) {
     boost::intrusive_ptr<DocumentSourceIn> source(new DocumentSourceIn(
-        pExpCtx, consumer, topic, format));
+        pExpCtx, consumer, topic, format, metadata));
     return source;
 };
 

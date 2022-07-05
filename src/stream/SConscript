@@ -53,8 +53,8 @@ env.Library(
     ],
     LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-
+        '$BUILD_DIR/mongo/db/commands/stream_registry',
+        '$BUILD_DIR/mongo/db/pipeline/pipeline'
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
