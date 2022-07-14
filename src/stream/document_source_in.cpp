@@ -32,37 +32,23 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/intrusive_ptr.hpp>
 
-#include "document_source_in.h"
-
 #include "mongo/bson/json.h"
 #include "mongo/db/commands/stream_registry.h"
 #include "mongo/db/pipeline/pipeline.h"
 #include "mongo/logv2/log.h"
 #include "mongo/platform/basic.h"
 
+#include "document_source_in.h"
+
 namespace mongo {
 
 DocumentSourceIn::DocumentSourceIn(
     const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
-    const std::shared_ptr<cppkafka::Consumer> consumer,
-    const std::string topic,
-    const std::string format,
-    const BSONObj metadata)
+    const std::shared_ptr<SourceConnector> sourceConnector,
+    const std::string streamName)
     : DocumentSource(kStageName, pExpCtx),
-    _consumer(consumer),
-    _format(format){
-        // Subscribe to the topic
-        _consumer->subscribe({ topic });
-
-        StreamListener* listener = new StreamListener([this](DocumentSource::GetNextResult document) {
-            stdx::lock_guard<Latch> lock(_mutex);
-            _insertionQueue.push_back(std::move(document));
-        });
-
-        auto streamName = metadata.getField("name").str();
-        auto stream = StreamRegistry::get()->getStream(streamName);
-        stream->addListener(listener);
-    }
+    _sourceConnector(sourceConnector),
+    _manualInsertionSourceConnector(new ManualInsertionSourceConnector(streamName)) {}
 
 
 // Macro to register the document source.
@@ -71,79 +57,20 @@ REGISTER_DOCUMENT_SOURCE(in,
                          DocumentSourceIn::createFromBson,
                          AllowedWithApiStrict::kAlways);
 
-boost::optional<DocumentSource::GetNextResult> DocumentSourceIn::_popInsertionQueueIfNotEmpty() {
-    // Protect _insertionQueue
-    stdx::lock_guard<Latch> lock(_mutex);
-    if (_insertionQueue.size() > 0) {
-        auto out = std::move(_insertionQueue.front());
-        _insertionQueue.pop_front();
-        return out;
-    }
-    return boost::none;
-}
 
 DocumentSource::GetNextResult DocumentSourceIn::doGetNext() {
-    if (auto entry = _popInsertionQueueIfNotEmpty()) {
-        auto entryObj = entry.get();
-        LOGV2(999999, "Received manual insertion", "payload"_attr = entryObj.getDocument().toBson());
-        return entryObj;
-    }
-
-    cppkafka::Message msg = _consumer->poll();
-
-    // If we managed to get a message
-    if (msg) {
-        if (msg.is_eof()) {
-            // EOF means we've reached the end of the log
-            LOGV2(999999, "Received Kafka EOF");
-            return GetNextResult::makeEOF();
-        }
-
-        if (msg.get_error() && !msg.is_eof()) {
-            std::string errorMessage = std::string(msg.get_payload());
-            LOGV2(999999, "Kafka Consumer Error", "error"_attr = errorMessage);
-        } else {
-            std::string payload = std::string(msg.get_payload());
-
-            int64_t offset = msg.get_offset();
-
-            LOGV2(999999, "Received Kafka payload", "payload"_attr = payload, "offset"_attr=offset);
-
-            // Convert string to BSONObj
-
-            BSONObj obj;
-
-            try {
-                obj = fromjson(payload);
-            } catch (std::exception&) {
-                // Message could not be parsed to JSON.
-                return GetNextResult::makePauseExecution();
-            }
-
-            // Create new BSON with response
-            BSONObjBuilder builder = BSONObjBuilder();
-            builder.appendElements(obj);
-
-            BSONObj newObj = builder.done();
-
-             // The output doc is the same as the input doc, with the added fields.
-            MutableDocument output;
-
-            output.newStorageWithBson(newObj, false);
-
-            // TODO: maybe a cheaper way to transfer ownership to MutableDoc
-            output.makeOwned();
-
-            // Update metadata
-            output.metadata().setStreamMessage(std::move(msg));
-            Document outputDoc = output.freeze();
-
-            // Create new Document from newly constructed BSONObj and return
-            return DocumentSource::GetNextResult(std::move(outputDoc));
+    if (_manualInsertionSourceConnector) {
+        auto doc = _manualInsertionSourceConnector->getNext();
+        if (!doc.isPaused()) {
+            return doc;
         }
     }
 
-    return GetNextResult::makePauseExecution();
+    if (!_sourceConnector) {
+        return GetNextResult::makePauseExecution();
+    }
+
+    return _sourceConnector->getNext();
 }
 
 Value DocumentSourceIn::serialize(boost::optional<ExplainOptions::Verbosity> explain) const {
@@ -157,12 +84,10 @@ Value DocumentSourceIn::serialize(boost::optional<ExplainOptions::Verbosity> exp
 
 boost::intrusive_ptr<DocumentSourceIn> DocumentSourceIn::create(
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
-        const std::shared_ptr<cppkafka::Consumer> consumer,
-        const std::string topic,
-        const std::string format,
-        const BSONObj metadata) {
+        const std::shared_ptr<SourceConnector> sourceConnector,
+        const std::string streamName) {
     boost::intrusive_ptr<DocumentSourceIn> source(new DocumentSourceIn(
-        pExpCtx, consumer, topic, format, metadata));
+        pExpCtx, sourceConnector, streamName));
     return source;
 };
 

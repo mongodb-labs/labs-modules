@@ -12,6 +12,8 @@ env.Append(LINKFLAGS=[
     '-Wl,-rpath,/usr/lib'
 ])
 
+env.SConscript(dirs=['source_connectors'], exports=['env'])
+
 env.Library(
     target='stream_controller',
     source=[
@@ -35,6 +37,8 @@ env.Library(
         'document_source_in',
         'document_source_stream_commit',
         'document_source_stream_controller',
+        'source_connectors/change_stream_source_connector',
+        'source_connectors/kafka_source_connector',
         'stream_controller',
     ],
     LIBDEPS_DEPENDENTS=[
@@ -54,15 +58,13 @@ env.Library(
     LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/commands/stream_registry',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline'
+        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+        'source_connectors/manual_insertion_source_connector'
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
         '$BUILD_DIR/mongo/s/mongos_initializers'
-    ],
-    SYSLIBDEPS=[
-        'cppkafka',
-    ],
+    ]
 )
 
 env.Library(
