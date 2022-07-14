@@ -47,7 +47,9 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "mongo/logv2/log.h"
 
@@ -195,21 +197,32 @@ DocumentSource::GetNextResult DocumentSourceGroupStream::doGetNext() {
     }
     invariant(initializationResult.isEOF() || initializationResult.isUnblock());
   }
-  auto res = (_states.front()._spilled ? getNextSpilled() : getNextStandard());
+  if (_localMerger) {
+    return (_states.front()._spilled ? getNextSpilled() : getNextStandard());
+  } else {
+    LOGV2(99999, "Outer get next");
+    if (_windowChanged)
+      mergeStates();
+    invariant(!_windowChanged);
+    invariant(_mergerStage);
+    auto res = (*_mergerStage)->getNext();
 
-  if (res.isEOF()) {
-    if (_eof) {
-      dispose(); // really done, propagete disposing up
-      return res;
+    LOGV2(99999, "Got _mergerStage res");
+
+    if (res.isEOF()) {
+      LOGV2(99999, "MergerStage EOF");
+      if (_eof) {
+        dispose(); // really done, propagete disposing up
+        return res;
+      }
+      doDispose();
+      return DocumentSource::GetNextResult::makePauseExecution();
     }
-    return DocumentSource::GetNextResult::makeUnblock(Document());
-  }
 
-  for (auto &&accum : _states.front()._currentAccumulators) {
-    accum->reset(); // Prep accumulators for a new group.
-  }
+    LOGV2(99999, "Returning _mergerStage res");
 
-  return res;
+    return res;
+  }
 }
 
 DocumentSource::GetNextResult DocumentSourceGroupStream::getNextSpilled() {
@@ -269,19 +282,77 @@ DocumentSource::GetNextResult DocumentSourceGroupStream::getNextSpilled() {
                       pExpCtx->needsMerge);
 }
 
+DocumentSource::GetNextResult
+DocumentSourceGroupStream::_getNextSpilled(State &state) {
+  // We aren't streaming, and we have spilled to disk.
+  if (!state._sorterIterator) {
+    return DocumentSource::GetNextResult::makeEOF();
+  }
+
+  state._currentId = state._firstPartOfNextGroup.first;
+  const size_t numAccumulators = _accumulatedFields.size();
+
+  // Call startNewGroup on every accumulator.
+  Value expandedId = expandId(state._currentId);
+  Document idDoc = expandedId.getType() == BSONType::Object
+                       ? expandedId.getDocument()
+                       : Document();
+  for (size_t i = 0; i < numAccumulators; ++i) {
+    Value initializerValue = _accumulatedFields[i].expr.initializer->evaluate(
+        idDoc, &pExpCtx->variables);
+    state._currentAccumulators[i]->startNewGroup(initializerValue);
+  }
+
+  while (pExpCtx->getValueComparator().evaluate(
+      state._currentId == state._firstPartOfNextGroup.first)) {
+    // Inside of this loop, _firstPartOfNextGroup is the current data being
+    // processed. At loop exit, it is the first value to be processed in the
+    // next group.
+    switch (numAccumulators) { // mirrors switch in spill()
+    case 1: // Single accumulators serialize as a single Value.
+      state._currentAccumulators[0]->process(state._firstPartOfNextGroup.second,
+                                             true);
+      [[fallthrough]];
+    case 0: // No accumulators so no Values.
+      break;
+    default: { // Multiple accumulators serialize as an array of Values.
+      const vector<Value> &accumulatorStates =
+          state._firstPartOfNextGroup.second.getArray();
+      for (size_t i = 0; i < numAccumulators; i++) {
+        state._currentAccumulators[i]->process(accumulatorStates[i], true);
+      }
+    }
+    }
+
+    if (!state._sorterIterator->more()) {
+      return DocumentSource::GetNextResult::makeEOF();
+    }
+
+    state._firstPartOfNextGroup = state._sorterIterator->next();
+  }
+
+  return makeDocument(state._currentId, state._currentAccumulators,
+                      pExpCtx->needsMerge);
+}
+
 DocumentSource::GetNextResult DocumentSourceGroupStream::getNextStandard() {
   // Not spilled, and not streaming.
   if (_states.front()._groups.empty()) {
-    return GetNextResult::makeEOF();
+    return DocumentSource::GetNextResult::makeEOF();
   }
 
   Document out = makeDocument(_states.front()._groupsIterator->first,
                               _states.front()._groupsIterator->second,
                               pExpCtx->needsMerge);
 
-  LOGV2(99999, "getNextStandard", "out"_attr = out);
+  if (_localMerger) {
+    LOGV2(99999, "local merger getNextStandard", "out"_attr = out);
+  } else {
+    LOGV2(99999, "getNextStandard", "out"_attr = out);
+  }
   if (++_states.front()._groupsIterator == _states.front()._groups.end()) {
     doDispose(); // reseting states, not really disposing
+    disposeState(_states.front());
   }
 
   return out;
@@ -289,16 +360,20 @@ DocumentSource::GetNextResult DocumentSourceGroupStream::getNextStandard() {
 
 void DocumentSourceGroupStream::doDispose() {
   // Free our resources.
-  _states.front()._groups =
-      pExpCtx->getValueComparator().makeUnorderedValueMap<Accumulators>();
-  _states.front()._sorterIterator.reset();
-
-  // Make us look done.
-  _states.front()._groupsIterator = _states.front()._groups.end();
-  // also reset states for potential next window
-  _states.front()._spilled = false;
   _doingMerge = false;
   _initialized = false;
+  _mergerStage = boost::none;
+}
+
+void DocumentSourceGroupStream::disposeState(State &state) {
+  state._groups =
+      pExpCtx->getValueComparator().makeUnorderedValueMap<Accumulators>();
+  state._sorterIterator.reset();
+
+  // Make us look done.
+  state._groupsIterator = state._groups.end();
+  // also reset states for potential next window
+  state._spilled = false;
 }
 
 intrusive_ptr<DocumentSource> DocumentSourceGroupStream::optimize() {
@@ -480,7 +555,8 @@ DocumentSourceGroupStream::DocumentSourceGroupStream(
                 ? std::make_shared<Sorter<Value, Value>::File>(
                       expCtx->tempDir + "/" + nextFileName())
                 : nullptr),
-      _initialized(false), _eof(false), _states{}, _sbeCompatible(false) {
+      _initialized(false), _eof(false), _states{}, _sbeCompatible(false),
+      _windowChanged(true), _localMerger(false) {
   _states.emplace_front(expCtx);
 }
 
@@ -652,72 +728,11 @@ DocumentSourceGroupStream::initializeSelf(GetNextResult input) {
   DocumentSourceGroupStream::State &state = _states.front();
   // Barring any pausing, this loop exhausts 'pSource' and populates '_groups'.
   for (; input.isAdvanced(); input = pSource->getNext()) {
-    if (shouldSpillWithAttemptToSaveMemory()) {
-      state._sortedFiles.push_back(spill());
-    }
+    _handleNextInput(input);
+  }
 
-    // We release the result document here so that it does not outlive the end
-    // of this loop iteration. Not releasing could lead to an array copy when
-    // this group follows an unwind.
-    auto rootDocument = input.releaseDocument();
-    LOGV2(99999, "Document", "rootDoc"_attr = rootDocument);
-    Value id = computeId(rootDocument);
-
-    // Look for the _id value in the map. If it's not there, add a new entry
-    // with a blank accumulator. This is done in a somewhat odd way in order to
-    // avoid hashing 'id' and looking it up in '_groups' multiple times.
-    const size_t oldSize = state._groups.size();
-    vector<intrusive_ptr<AccumulatorState>> &group = (state._groups)[id];
-    const bool inserted = state._groups.size() != oldSize;
-
-    vector<uint64_t> oldAccumMemUsage(numAccumulators, 0);
-    if (inserted) {
-      _memoryTracker.set(_memoryTracker.currentMemoryBytes() +
-                         id.getApproximateSize());
-
-      // Initialize and add the accumulators
-      Value expandedId = expandId(id);
-      Document idDoc = expandedId.getType() == BSONType::Object
-                           ? expandedId.getDocument()
-                           : Document();
-      group.reserve(numAccumulators);
-      for (auto &&accumulatedField : _accumulatedFields) {
-        auto accum = accumulatedField.makeAccumulator();
-        Value initializerValue = accumulatedField.expr.initializer->evaluate(
-            idDoc, &pExpCtx->variables);
-        accum->startNewGroup(initializerValue);
-        group.push_back(accum);
-      }
-    }
-
-    /* tickle all the accumulators for the group we found */
-    dassert(numAccumulators == group.size());
-
-    for (size_t i = 0; i < numAccumulators; i++) {
-      // Only process the input and update the memory footprint if the current
-      // accumulator needs more input.
-      if (group[i]->needsInput()) {
-        const auto prevMemUsage = inserted ? 0 : group[i]->getMemUsage();
-        group[i]->process(_accumulatedFields[i].expr.argument->evaluate(
-                              rootDocument, &pExpCtx->variables),
-                          _doingMerge);
-        _memoryTracker.update(_accumulatedFields[i].fieldName,
-                              group[i]->getMemUsage() - prevMemUsage);
-      }
-    }
-
-    if (kDebugBuild && !pExpCtx->opCtx->readOnly()) {
-      // In debug mode, spill every time we have a duplicate id to stress merge
-      // logic.
-      if (!inserted &&                     // is a dup
-          !pExpCtx->inMongos &&            // can't spill to disk in mongos
-          !_memoryTracker._allowDiskUse && // don't change behavior when testing
-                                           // external sort
-          state._sortedFiles.size() < 20) { // don't open too many FDs
-
-        state._sortedFiles.push_back(spill());
-      }
-    }
+  if (_localMerger) {
+    LOGV2(000000, "Local Merger Init Self");
   }
 
   switch (input.getStatus()) {
@@ -737,7 +752,9 @@ DocumentSourceGroupStream::initializeSelf(GetNextResult input) {
   }
   case DocumentSource::GetNextResult::ReturnStatus::kPop: {
     LOGV2(99999, "poped");
+    // disposeState(_states.back());
     _states.pop_back();
+    _windowChanged = true;
     return DocumentSource::GetNextResult::
         makePauseExecution(); // Window control should be
                               // consumed at the first
@@ -786,10 +803,87 @@ DocumentSourceGroupStream::initializeSelf(GetNextResult input) {
     // initialization after getting a
     // GetNextResult::ResultState::kPauseExecution.
     _initialized = true;
+    _windowChanged = true;
     return input;
   }
   }
   MONGO_UNREACHABLE;
+}
+
+void DocumentSourceGroupStream::_handleNextInput(
+    DocumentSource::GetNextResult input) {
+  const size_t numAccumulators = _accumulatedFields.size();
+  DocumentSourceGroupStream::State &state = _states.front();
+  if (shouldSpillWithAttemptToSaveMemory()) {
+    state._sortedFiles.push_back(spill());
+  }
+
+  // We release the result document here so that it does not outlive the end
+  // of this loop iteration. Not releasing could lead to an array copy when
+  // this group follows an unwind.
+  auto rootDocument = input.releaseDocument();
+  if (_localMerger) {
+    LOGV2(99999, "Fed Document", "rootDoc"_attr = rootDocument);
+  } else {
+    LOGV2(99999, "Document", "rootDoc"_attr = rootDocument);
+  }
+  Value id = computeId(rootDocument);
+
+  // Look for the _id value in the map. If it's not there, add a new entry
+  // with a blank accumulator. This is done in a somewhat odd way in order to
+  // avoid hashing 'id' and looking it up in '_groups' multiple times.
+  const size_t oldSize = state._groups.size();
+  vector<intrusive_ptr<AccumulatorState>> &group = (state._groups)[id];
+  const bool inserted = state._groups.size() != oldSize;
+
+  vector<uint64_t> oldAccumMemUsage(numAccumulators, 0);
+  if (inserted) {
+    _memoryTracker.set(_memoryTracker.currentMemoryBytes() +
+                       id.getApproximateSize());
+
+    // Initialize and add the accumulators
+    Value expandedId = expandId(id);
+    Document idDoc = expandedId.getType() == BSONType::Object
+                         ? expandedId.getDocument()
+                         : Document();
+    group.reserve(numAccumulators);
+    for (auto &&accumulatedField : _accumulatedFields) {
+      auto accum = accumulatedField.makeAccumulator();
+      Value initializerValue = accumulatedField.expr.initializer->evaluate(
+          idDoc, &pExpCtx->variables);
+      accum->startNewGroup(initializerValue);
+      group.push_back(accum);
+    }
+  }
+
+  /* tickle all the accumulators for the group we found */
+  dassert(numAccumulators == group.size());
+
+  for (size_t i = 0; i < numAccumulators; i++) {
+    // Only process the input and update the memory footprint if the current
+    // accumulator needs more input.
+    if (group[i]->needsInput()) {
+      const auto prevMemUsage = inserted ? 0 : group[i]->getMemUsage();
+      group[i]->process(_accumulatedFields[i].expr.argument->evaluate(
+                            rootDocument, &pExpCtx->variables),
+                        _doingMerge);
+      _memoryTracker.update(_accumulatedFields[i].fieldName,
+                            group[i]->getMemUsage() - prevMemUsage);
+    }
+  }
+
+  if (kDebugBuild && !pExpCtx->opCtx->readOnly()) {
+    // In debug mode, spill every time we have a duplicate id to stress merge
+    // logic.
+    if (!inserted &&                      // is a dup
+        !pExpCtx->inMongos &&             // can't spill to disk in mongos
+        !_memoryTracker._allowDiskUse &&  // don't change behavior when testing
+                                          // external sort
+        state._sortedFiles.size() < 20) { // don't open too many FDs
+
+      state._sortedFiles.push_back(spill());
+    }
+  }
 }
 
 shared_ptr<Sorter<Value, Value>::Iterator> DocumentSourceGroupStream::spill() {
@@ -1044,6 +1138,50 @@ DocumentSourceGroupStream::rewriteGroupAsTransformOnFirstDocument() const {
 
 size_t DocumentSourceGroupStream::getMaxMemoryUsageBytes() const {
   return _memoryTracker._maxAllowedMemoryUsageBytes;
+}
+
+void DocumentSourceGroupStream::mergeStates() {
+  intrusive_ptr<DocumentSourceGroupStream> mergingGroup(
+      new DocumentSourceGroupStream(pExpCtx));
+  mergingGroup->setDoingMerge(true);
+  mergingGroup->setLocalMerger(true);
+  VariablesParseState vps = pExpCtx->variablesParseState;
+  /* the merger will use the same grouping key */
+  mergingGroup->setIdExpression(
+      ExpressionFieldPath::parse(pExpCtx.get(), "$$ROOT._id", vps));
+  for (auto &&accumulatedField : _accumulatedFields) {
+    // The merger's output field names will be the same, as will the accumulator
+    // factories. However, for some accumulators, the expression to be
+    // accumulated will be different. The original accumulator may be collecting
+    // an expression based on a field expression or constant.  Here, we
+    // accumulate the output of the same name from the prior group.
+    auto copiedAccumulatedField = accumulatedField;
+    copiedAccumulatedField.expr.argument = ExpressionFieldPath::parse(
+        pExpCtx.get(), "$$ROOT." + copiedAccumulatedField.fieldName, vps);
+    mergingGroup->addAccumulator(copiedAccumulatedField);
+    mergingGroup->_memoryTracker.set(copiedAccumulatedField.fieldName, 0);
+  }
+  LOGV2(_states.size(), "# states");
+  int i = 0;
+  for (auto &state : _states) {
+    LOGV2(i, "State Pos");
+    if (state._spilled) {
+      LOGV2(i, "State spilled");
+    } else {
+      LOGV2(i, "State not spilled");
+      for (auto it = state._groups.begin(); it != state._groups.end(); ++it) {
+        Document next =
+            makeDocument(it->first, it->second, pExpCtx->needsMerge);
+        LOGV2(99999, "Feeding next", "next"_attr = next);
+        mergingGroup->_handleNextInput(
+            DocumentSource::GetNextResult(std::move(next)));
+      }
+    }
+    i++;
+  }
+  mergingGroup->setSource(new MkEOF(pExpCtx));
+  _mergerStage = mergingGroup;
+  _windowChanged = false;
 }
 
 } // namespace mongo

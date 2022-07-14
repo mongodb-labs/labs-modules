@@ -17,19 +17,5 @@ pipeline = [
     {"$groups": {"_id": "$v", "res": {"$addToSet": "$k"}}},
 ]
 
-wins = []
 for r in db.test_ob.aggregate(pipeline):
     print(f"{r = }")
-    # if r["type"] == "kAdvanced":
-    #     if not wins:
-    #         wins.append([])
-    #     wins[-1].append(r["data"])
-    # elif r["type"] == "kUnblock":
-    #     win = list(map(lambda x: [_x["k"] for _x in x], wins))
-    #     print(f"{win = }")
-    # elif r["type"] == "kPop":
-    #     wins.pop(0)
-    # elif r["type"] == "kPartial":
-    #     wins.append([])
-
-print(f"{wins = }")

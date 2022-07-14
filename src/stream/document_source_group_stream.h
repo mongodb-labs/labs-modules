@@ -91,6 +91,31 @@ private:
   std::string _groupId;
 };
 
+// A dummy DocumentSource for triggering the eof of an inner group stage
+class MkEOF final : public DocumentSource {
+public:
+  static constexpr StringData kStageName = "$mkEOF"_sd;
+  const char *getSourceName() const final { return kStageName.rawData(); };
+  StageConstraints constraints(Pipeline::SplitState pipeState) const final {
+    StageConstraints constraints(
+        StreamType::kBlocking, PositionRequirement::kNone,
+        HostTypeRequirement::kNone, DiskUseRequirement::kWritesTmpData,
+        FacetRequirement::kAllowed, TransactionRequirement::kAllowed,
+        LookupRequirement::kAllowed, UnionRequirement::kAllowed);
+    return constraints;
+  }
+  GetNextResult doGetNext() final { return GetNextResult::makeEOF(); };
+  boost::optional<DistributedPlanLogic> distributedPlanLogic() final {
+    return boost::none;
+  }
+  Value serialize(boost::optional<ExplainOptions::Verbosity> explain =
+                      boost::none) const final {
+    return Value(Document{{"$mkEOF", Value(1)}});
+  }
+  explicit MkEOF(const boost::intrusive_ptr<ExpressionContext> &expCtx)
+      : DocumentSource(kStageName, expCtx) {}
+};
+
 class DocumentSourceGroupStream final : public DocumentSource {
 public:
   using Accumulators = std::vector<boost::intrusive_ptr<AccumulatorState>>;
@@ -197,6 +222,10 @@ public:
   // True if this $group can be pushed down to SBE.
   bool sbeCompatible() const { return _sbeCompatible; }
 
+  void _handleNextInput(GetNextResult input);
+
+  void setLocalMerger(bool localMerger) { _localMerger = localMerger; }
+
 protected:
   GetNextResult doGetNext() final;
   void doDispose() final;
@@ -206,6 +235,33 @@ private:
       const boost::intrusive_ptr<ExpressionContext> &expCtx,
       boost::optional<size_t> maxMemoryUsageBytes = boost::none);
 
+  struct State {
+    Value _currentId;
+    Accumulators _currentAccumulators;
+
+    // We use boost::optional to defer initialization until the
+    // ExpressionContext containing the correct comparator is injected, since
+    // the groups must be built using the comparator's definition of equality.
+    GroupsMap _groups;
+
+    using SortedFilesT =
+        std::vector<std::shared_ptr<Sorter<Value, Value>::Iterator>>;
+    SortedFilesT _sortedFiles;
+    bool _spilled;
+
+    // Only used when '_spilled' is false.
+    GroupsMap::iterator _groupsIterator;
+
+    // Only used when '_spilled' is true.
+    std::unique_ptr<Sorter<Value, Value>::Iterator> _sorterIterator;
+
+    std::pair<Value, Value> _firstPartOfNextGroup;
+
+    State(const boost::intrusive_ptr<ExpressionContext> &expCtx)
+        : _groups(expCtx->getValueComparator()
+                      .makeUnorderedValueMap<Accumulators>()),
+          _spilled(false) {}
+  };
   /**
    * getNext() dispatches to one of these three depending on what type of $group
    * it is. These methods expect '_currentAccumulators' to have been reset
@@ -214,6 +270,7 @@ private:
    */
   GetNextResult getNextSpilled();
   GetNextResult getNextStandard();
+  GetNextResult _getNextSpilled(State &state);
 
   GetNextResult getNextFromSource();
 
@@ -279,6 +336,9 @@ private:
    */
   bool shouldSpillWithAttemptToSaveMemory();
 
+  void mergeStates();
+  void disposeState(State &);
+
   std::vector<AccumulationStatement> _accumulatedFields;
 
   bool _doingMerge;
@@ -300,37 +360,13 @@ private:
   bool _initialized;
   bool _eof;
 
-  struct State {
-    Value _currentId;
-    Accumulators _currentAccumulators;
-
-    // We use boost::optional to defer initialization until the
-    // ExpressionContext containing the correct comparator is injected, since
-    // the groups must be built using the comparator's definition of equality.
-    GroupsMap _groups;
-
-    using SortedFilesT =
-        std::vector<std::shared_ptr<Sorter<Value, Value>::Iterator>>;
-    SortedFilesT _sortedFiles;
-    bool _spilled;
-
-    // Only used when '_spilled' is false.
-    GroupsMap::iterator _groupsIterator;
-
-    // Only used when '_spilled' is true.
-    std::unique_ptr<Sorter<Value, Value>::Iterator> _sorterIterator;
-
-    std::pair<Value, Value> _firstPartOfNextGroup;
-
-    State(const boost::intrusive_ptr<ExpressionContext> &expCtx)
-        : _groups(expCtx->getValueComparator()
-                      .makeUnorderedValueMap<Accumulators>()),
-          _spilled(false) {}
-  };
-
   std::deque<State> _states;
 
   bool _sbeCompatible;
+
+  bool _windowChanged;
+  boost::optional<boost::intrusive_ptr<DocumentSourceGroupStream>> _mergerStage;
+  bool _localMerger;
 };
 
 } // namespace mongo
