@@ -49,20 +49,19 @@ protected:
   GetNextResult doGetNext() final;
 
 private:
-  enum SWinState : uint8_t { GET = 0, POP = 1, WINDOW = 2 };
+  enum SWinState : uint8_t { GET, POP, PARTIAL, WINDOW };
 
   explicit DocumentSourceSimpSWindow(
       const boost::intrusive_ptr<ExpressionContext> &expCtx, int nWindow,
       int gap)
       : DocumentSource(kStageName, expCtx), _nWindow(nWindow), _gap(gap),
-        _interval(nWindow - gap + 1), _nElem(0), _windowed(false), _state(GET) {}
+        _nElem(0), _windowed(false), _state(GET) {}
 
   void startTimer();
   void getNext();
 
   int _nWindow;
   int _gap;
-  int _interval;
   int _nElem;
   bool _windowed;
   SWinState _state;

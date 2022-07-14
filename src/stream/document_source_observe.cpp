@@ -37,17 +37,6 @@ intrusive_ptr<DocumentSource> DocumentSourceOb::createFromBson(
   return expWinStage;
 }
 
-/*
-DocumentSource::GetNextResult DocumentSourceExpWindow::initialize() {
-    GetNextResult input = pSource->getNext();
-    _acc_docs.push_back(input.releaseDocument());
-    for (; input.isAdvanced() && _acc_docs.size() < _window_size; input =
-pSource->getNext()) { _acc_docs.push_back(input.releaseDocument());
-    }
-    return input;
-}
-*/
-
 DocumentSource::GetNextResult DocumentSourceOb::doGetNext() {
   auto res = pSource->getNext();
   switch (res.getStatus()) {
@@ -62,8 +51,10 @@ DocumentSource::GetNextResult DocumentSourceOb::doGetNext() {
     return Document({{"type", "kUnblock"_sd}});
   }
   case DocumentSource::GetNextResult::ReturnStatus::kPop: {
-    auto doc = res.releaseDocument();
-    return Document({{"type", "kPop"_sd}, {"data", doc}});
+    return Document({{"type", "kPop"_sd}});
+  }
+  case DocumentSource::GetNextResult::ReturnStatus::kPartial: {
+    return Document({{"type", "kPartial"_sd}});
   }
   case DocumentSource::GetNextResult::ReturnStatus::kEOF: {
     return res;

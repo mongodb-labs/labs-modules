@@ -24,13 +24,9 @@
 #include "mongo/util/assert_util.h"
 #include "mongo/util/str.h"
 
-#include <iostream>
-
 namespace mongo {
 
 using boost::intrusive_ptr;
-using std::cout;
-using std::endl;
 using std::pair;
 using std::string;
 using std::vector;
@@ -59,18 +55,26 @@ intrusive_ptr<DocumentSource> DocumentSourceSimpSWindow::createFromBson(
 }
 
 DocumentSource::GetNextResult DocumentSourceSimpSWindow::doGetNext() {
-  cout << "simpswin get next" << endl;
+  // LOGV2(114514, "simpswin get next");
 
   switch (_state) {
   case GET: {
     auto next = pSource->getNext();
     _nElem += 1;
-    if (_nElem >= _nWindow &&
-        (_nElem - _nWindow + _interval) % _interval == 0) {
+    if (_nElem % _gap == 0) {
+      _state = PARTIAL;
+    } else if ((_nElem >= _nWindow) && (_nElem - _nWindow) % _gap == 0) {
       _state = WINDOW;
-      _nElem -= _interval;
     }
     return next;
+  }
+  case PARTIAL: {
+    if ((_nElem >= _nWindow) && (_nElem - _nWindow) % _gap == 0) {
+      _state = WINDOW;
+    } else {
+      _state = GET;
+    }
+    return DocumentSource::GetNextResult::makePartial();
   }
   case WINDOW: {
     _state = POP;
@@ -78,7 +82,7 @@ DocumentSource::GetNextResult DocumentSourceSimpSWindow::doGetNext() {
   }
   case POP: {
     _state = GET;
-    return DocumentSource::GetNextResult::makePop({{"interval", _interval}});
+    return DocumentSource::GetNextResult::makePop();
   }
   }
   MONGO_UNREACHABLE;
