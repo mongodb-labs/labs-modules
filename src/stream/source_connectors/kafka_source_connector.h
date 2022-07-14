@@ -21,4 +21,5 @@ namespace mongo {
     private:
       std::shared_ptr<cppkafka::Consumer> _consumer;
   };
-}
+
+} // namespace mongo

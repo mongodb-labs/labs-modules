@@ -19,4 +19,5 @@ namespace mongo {
       mutable Mutex _mutex = MONGO_MAKE_LATCH("ManualInsertionSourceConnector::_mutex");
       std::deque<DocumentSource::GetNextResult> _insertionQueue;
   };
-}
+
+} // namespace mongo

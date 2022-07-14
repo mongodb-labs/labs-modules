@@ -28,4 +28,5 @@ namespace mongo {
 
       NamespaceString _nss;
   };
-}
+
+} // namespace mongo

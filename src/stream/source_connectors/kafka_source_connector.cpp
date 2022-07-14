@@ -82,4 +82,4 @@ DocumentSource::GetNextResult KafkaSourceConnector::getNext() {
     return DocumentSource::GetNextResult::makePauseExecution();
 };
 
-}
+} // namespace mongo
