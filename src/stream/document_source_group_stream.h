@@ -270,7 +270,6 @@ private:
    */
   GetNextResult getNextSpilled();
   GetNextResult getNextStandard();
-  GetNextResult _getNextSpilled(State &state);
 
   GetNextResult getNextFromSource();
 

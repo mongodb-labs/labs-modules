@@ -282,59 +282,6 @@ DocumentSource::GetNextResult DocumentSourceGroupStream::getNextSpilled() {
                       pExpCtx->needsMerge);
 }
 
-DocumentSource::GetNextResult
-DocumentSourceGroupStream::_getNextSpilled(State &state) {
-  // We aren't streaming, and we have spilled to disk.
-  if (!state._sorterIterator) {
-    return DocumentSource::GetNextResult::makeEOF();
-  }
-
-  state._currentId = state._firstPartOfNextGroup.first;
-  const size_t numAccumulators = _accumulatedFields.size();
-
-  // Call startNewGroup on every accumulator.
-  Value expandedId = expandId(state._currentId);
-  Document idDoc = expandedId.getType() == BSONType::Object
-                       ? expandedId.getDocument()
-                       : Document();
-  for (size_t i = 0; i < numAccumulators; ++i) {
-    Value initializerValue = _accumulatedFields[i].expr.initializer->evaluate(
-        idDoc, &pExpCtx->variables);
-    state._currentAccumulators[i]->startNewGroup(initializerValue);
-  }
-
-  while (pExpCtx->getValueComparator().evaluate(
-      state._currentId == state._firstPartOfNextGroup.first)) {
-    // Inside of this loop, _firstPartOfNextGroup is the current data being
-    // processed. At loop exit, it is the first value to be processed in the
-    // next group.
-    switch (numAccumulators) { // mirrors switch in spill()
-    case 1: // Single accumulators serialize as a single Value.
-      state._currentAccumulators[0]->process(state._firstPartOfNextGroup.second,
-                                             true);
-      [[fallthrough]];
-    case 0: // No accumulators so no Values.
-      break;
-    default: { // Multiple accumulators serialize as an array of Values.
-      const vector<Value> &accumulatorStates =
-          state._firstPartOfNextGroup.second.getArray();
-      for (size_t i = 0; i < numAccumulators; i++) {
-        state._currentAccumulators[i]->process(accumulatorStates[i], true);
-      }
-    }
-    }
-
-    if (!state._sorterIterator->more()) {
-      return DocumentSource::GetNextResult::makeEOF();
-    }
-
-    state._firstPartOfNextGroup = state._sorterIterator->next();
-  }
-
-  return makeDocument(state._currentId, state._currentAccumulators,
-                      pExpCtx->needsMerge);
-}
-
 DocumentSource::GetNextResult DocumentSourceGroupStream::getNextStandard() {
   // Not spilled, and not streaming.
   if (_states.front()._groups.empty()) {
@@ -1161,14 +1108,67 @@ void DocumentSourceGroupStream::mergeStates() {
     mergingGroup->addAccumulator(copiedAccumulatedField);
     mergingGroup->_memoryTracker.set(copiedAccumulatedField.fieldName, 0);
   }
-  LOGV2(_states.size(), "# states");
-  int i = 0;
   for (auto &state : _states) {
-    LOGV2(i, "State Pos");
+    // Basically manual copy of getNextSpilled and getNextStandard,
+    // maybe worth extracting common logic?
     if (state._spilled) {
-      LOGV2(i, "State spilled");
+      auto firstPartOfNextGroup = state._firstPartOfNextGroup;
+      auto sorterIterator = Sorter<Value, Value>::Iterator::merge(
+          state._sortedFiles, SortOptions(),
+          SorterComparator(pExpCtx->getValueComparator()));
+      const size_t numAccumulators = _accumulatedFields.size();
+
+      while (sorterIterator->more()) {
+        Value currentId = firstPartOfNextGroup.first;
+
+        // Call startNewGroup on every accumulator.
+        Value expandedId = expandId(currentId);
+        Document idDoc = expandedId.getType() == BSONType::Object
+                             ? expandedId.getDocument()
+                             : Document();
+        for (size_t i = 0; i < numAccumulators; ++i) {
+          Value initializerValue =
+              _accumulatedFields[i].expr.initializer->evaluate(
+                  idDoc, &pExpCtx->variables);
+          state._currentAccumulators[i]->reset();
+          state._currentAccumulators[i]->startNewGroup(initializerValue);
+        }
+
+        while (pExpCtx->getValueComparator().evaluate(
+            currentId == firstPartOfNextGroup.first)) {
+          // Inside of this loop, _firstPartOfNextGroup is the current data
+          // being processed. At loop exit, it is the first value to be
+          // processed in the next group.
+          switch (numAccumulators) { // mirrors switch in spill()
+          case 1: // Single accumulators serialize as a single Value.
+            state._currentAccumulators[0]->process(firstPartOfNextGroup.second,
+                                                   true);
+            [[fallthrough]];
+          case 0: // No accumulators so no Values.
+            break;
+          default: { // Multiple accumulators serialize as an array of Values.
+            const vector<Value> &accumulatorStates =
+                firstPartOfNextGroup.second.getArray();
+            for (size_t i = 0; i < numAccumulators; i++) {
+              state._currentAccumulators[i]->process(accumulatorStates[i],
+                                                     true);
+            }
+          }
+          }
+
+          if (!sorterIterator->more()) {
+            break;
+          }
+          firstPartOfNextGroup = sorterIterator->next();
+        }
+
+        Document next = makeDocument(currentId, state._currentAccumulators,
+                                     pExpCtx->needsMerge);
+        LOGV2(99999, "Feeding next", "next"_attr = next);
+        mergingGroup->_handleNextInput(
+            DocumentSource::GetNextResult(std::move(next)));
+      }
     } else {
-      LOGV2(i, "State not spilled");
       for (auto it = state._groups.begin(); it != state._groups.end(); ++it) {
         Document next =
             makeDocument(it->first, it->second, pExpCtx->needsMerge);
@@ -1177,7 +1177,6 @@ void DocumentSourceGroupStream::mergeStates() {
             DocumentSource::GetNextResult(std::move(next)));
       }
     }
-    i++;
   }
   mergingGroup->setSource(new MkEOF(pExpCtx));
   _mergerStage = mergingGroup;
