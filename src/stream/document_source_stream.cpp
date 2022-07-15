@@ -40,6 +40,9 @@
 #include "document_source_stream.h"
 #include "document_source_stream_commit.h"
 #include "document_source_stream_controller.h"
+#include "source_connectors/change_stream_source_connector.h"
+#include "source_connectors/kafka_source_connector.h"
+#include "source_connectors/source_connector.h"
 
 namespace mongo {
 
@@ -47,29 +50,35 @@ DocumentSourceStream::DocumentSourceStream(
     const boost::intrusive_ptr<ExpressionContext> &pExpCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
     const BSONObj metadata,
-    const cppkafka::Configuration kafkaConfig,
-    const std::string kafkaTopic,
-    const std::string kafkaTopicFormat)
-    : DocumentSource(kStageName, pExpCtx), _pipeline(std::move(pipeline)),
-      _streamController(new StreamController()),
-      _consumer(new cppkafka::Consumer(kafkaConfig)) {
-  // Insert $streamController as initial source
-  _streamController->setSource(DocumentSourceIn::create(
-      pExpCtx, _consumer, kafkaTopic, kafkaTopicFormat, metadata));
+    const std::shared_ptr<SourceConnector> sourceConnector,
+    const std::shared_ptr<cppkafka::Consumer> consumer)
+    : DocumentSource(kStageName, pExpCtx),
+    _pipeline(std::move(pipeline)),
+    _streamController(new StreamController())
+    {
+      auto streamName = metadata.getField("name").str();
 
-  _pipeline->addInitialSource(
-      DocumentSourceStreamController::create(pExpCtx, _streamController));
+      // Insert $streamController as initial source
+      _streamController->setSource(DocumentSourceIn::create(
+          pExpCtx, sourceConnector, streamName));
 
-  /*
-   * Add $streamCommit to end
-   * Agg pipeline shoud look like:
-   * [$in] => [$streamController] => [Regular Agg] => [$streamCommit]
-   * Previous:
-   * [$in] => [Regular Agg]
-   */
+      _pipeline->addInitialSource(
+          DocumentSourceStreamController::create(pExpCtx, _streamController));
 
-  _pipeline->addFinalSource(
-      DocumentSourceStreamCommit::create(pExpCtx, _consumer));
+      /*
+      * Add $streamCommit to end
+      * Agg pipeline shoud look like:
+      * [$in] => [$streamController] => [Regular Agg] => [$streamCommit]
+      * Previous:
+      * [$in] => [Regular Agg]
+      */
+
+      if (sourceConnector != nullptr) {
+        if (sourceConnector->getType() == SourceConnector::Type::kKafka) {
+          _pipeline->addFinalSource(
+            DocumentSourceStreamCommit::create(pExpCtx, consumer));
+        }
+      }
 }
 
 // Macro to register the document source.
@@ -101,11 +110,10 @@ boost::intrusive_ptr<DocumentSourceStream> DocumentSourceStream::create(
     const boost::intrusive_ptr<ExpressionContext> &pExpCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
     const BSONObj metadata,
-    const cppkafka::Configuration kafkaConfig,
-    const std::string kafkaTopic,
-    const std::string kafkaTopicFormat) {
+    const std::shared_ptr<SourceConnector> sourceConnector,
+    const std::shared_ptr<cppkafka::Consumer> consumer) {
   boost::intrusive_ptr<DocumentSourceStream> source(new DocumentSourceStream(
-      pExpCtx, std::move(pipeline), metadata, kafkaConfig, kafkaTopic, kafkaTopicFormat));
+      pExpCtx, std::move(pipeline), metadata, sourceConnector, consumer));
   return source;
 };
 
@@ -132,11 +140,9 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
   auto metadataObj = elemObj.getField("metadata").Obj();
 
   std::vector<BSONObj> rawPipeline;
-  cppkafka::Configuration kafkaConfig;
-  std::string kafkaTopic;
-  std::string kafkaTopicFormat;
+  std::shared_ptr<SourceConnector> sourceConnector;
+  std::shared_ptr<cppkafka::Consumer> kafkaConsumer;
 
-  int i = 0;
 
   for (auto &&subPipeElem : elemObj.getField("pipeline").Obj()) {
     uassert(
@@ -148,49 +154,54 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
 
     auto embeddedObject = subPipeElem.embeddedObject();
 
-    uassert(99999999,
-            str::stream() << "$in can only be the first stage in the pipeline",
-            !(embeddedObject.hasField("$in") && i != 0));
-
     if (embeddedObject.hasField("$in")) {
       BSONElement inArgElem = subPipeElem.Obj().getField("$in");
-
       BSONObj argObj = inArgElem.Obj();
 
-      auto connectionConfig = argObj.getField("connectionConfig");
+      if (argObj.hasField("db") && argObj.hasField("coll")) {
+        std::string db = argObj.getField("db").str();
+        std::string coll = argObj.getField("coll").str();
 
-      uassert(100029201,
-              str::stream() << "The connectionConfig argument to $stream must "
-                               "be an object, but found type: "
-                            << typeName(elem.type()),
-              connectionConfig.type() == BSONType::Object);
+        sourceConnector = std::make_shared<ChangeStreamSourceConnector>(pExpCtx, db, coll);
+      } else if (argObj.hasField("connectionConfig")) {
 
-      auto connectionConfigObj = connectionConfig.Obj();
+        auto connectionConfig = argObj.getField("connectionConfig");
 
-      // TODO: Need to do additional input validation for each of these steps.
-      auto bootstrapServer =
-          connectionConfigObj.getField("bootstrapServer").str();
-      auto streamUUID = metadataObj.getField("id").str();
-      kafkaTopic = connectionConfigObj.getField("topic").str();
-      kafkaTopicFormat = connectionConfigObj.getField("format").str();
+        uassert(100029201,
+                str::stream() << "The connectionConfig argument to $stream must "
+                                "be an object, but found type: "
+                              << typeName(elem.type()),
+                connectionConfig.type() == BSONType::Object);
 
-      LOGV2(999999, "streamUUID", "streamUUID"_attr=streamUUID);
+        auto connectionConfigObj = connectionConfig.Obj();
 
-      uassert(999999,
-          str::stream() << "required bootstrapServer or kafkaTopic field not set.",
-          (!bootstrapServer.empty() && !kafkaTopic.empty()));
+        // TODO: Need to do additional input validation for each of these steps.
+        auto bootstrapServer =
+            connectionConfigObj.getField("bootstrapServer").str();
+        auto streamUUID = metadataObj.getField("id").str();
+        std::string kafkaTopic = connectionConfigObj.getField("topic").str();
+        std::string kafkaTopicFormat = connectionConfigObj.getField("format").str();
 
-      kafkaConfig = {{"bootstrap.servers", bootstrapServer},
-                     // Change to catalog UUID once we have this
-                     {"group.id", streamUUID},
-                     // Disable auto commit
-                     {"enable.auto.commit", false},
-                     {"auto.offset.reset", "beginning"}};
+        LOGV2(999999, "streamUUID", "streamUUID"_attr=streamUUID);
+
+        uassert(999999,
+            str::stream() << "required bootstrapServer or kafkaTopic field not set.",
+            (!bootstrapServer.empty() && !kafkaTopic.empty()));
+
+        cppkafka::Configuration kafkaConfig = {{"bootstrap.servers", bootstrapServer},
+                      // Change to catalog UUID once we have this
+                      {"group.id", streamUUID},
+                      // Disable auto commit
+                      {"enable.auto.commit", false},
+                      {"auto.offset.reset", "beginning"}};
+
+        kafkaConsumer = std::make_shared<cppkafka::Consumer>(kafkaConfig);
+        sourceConnector = std::make_shared<KafkaSourceConnector>(kafkaConsumer, kafkaTopic);
+      }
     } else {
       // Do not insert $in as it will be added in manually
       rawPipeline.push_back(embeddedObject);
     }
-    i++;
   }
 
   auto pipeline =
@@ -213,8 +224,7 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
         });
       });
 
-  return DocumentSourceStream::create(pExpCtx, std::move(pipeline), std::move(metadataObj), kafkaConfig,
-                                      kafkaTopic, kafkaTopicFormat);
+  return DocumentSourceStream::create(pExpCtx, std::move(pipeline), std::move(metadataObj), sourceConnector, kafkaConsumer);
 }
 
 } // namespace mongo

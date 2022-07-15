@@ -33,6 +33,9 @@
 
 #include "mongo/db/pipeline/document_source.h"
 
+#include "source_connectors/manual_insertion_source_connector.h"
+#include "source_connectors/source_connector.h"
+
 namespace mongo {
 
 class DocumentSourceIn final : public DocumentSource {
@@ -42,10 +45,8 @@ public:
     // Create a new $in stage.
     static boost::intrusive_ptr<DocumentSourceIn> create(
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
-        const std::shared_ptr<cppkafka::Consumer> consumer,
-        const std::string topic,
-        const std::string kafkaTopicFormat,
-        const BSONObj metadata);
+        const std::shared_ptr<SourceConnector> sourceConnector,
+        const std::string streamName);
 
 
     static boost::intrusive_ptr<DocumentSource> createFromBson(
@@ -75,21 +76,13 @@ public:
 private:
     DocumentSourceIn(
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
-        const std::shared_ptr<cppkafka::Consumer> consumer,
-        const std::string topic,
-        const std::string kafkaTopicFormat,
-        const BSONObj metadata);
+        const std::shared_ptr<SourceConnector> sourceConnector,
+        const std::string streamName);
 
     GetNextResult doGetNext() final;
 
-    boost::optional<DocumentSource::GetNextResult> _popInsertionQueueIfNotEmpty();
-
-    std::shared_ptr<cppkafka::Consumer> _consumer;
-
-    std::string _format;
-
-    mutable Mutex _mutex = MONGO_MAKE_LATCH("DocumentSourceIn::_mutex");
-    std::deque<DocumentSource::GetNextResult> _insertionQueue;
+    std::shared_ptr<SourceConnector> _sourceConnector;
+    std::shared_ptr<ManualInsertionSourceConnector> _manualInsertionSourceConnector;
 };
 
 }  // namespace mongo

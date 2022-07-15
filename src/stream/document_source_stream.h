@@ -47,9 +47,8 @@ public:
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
         std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
         const BSONObj metadata,
-        const cppkafka::Configuration kafkaConfig,
-        const std::string kafkaTopic,
-        const std::string kafkaTopicFormat);
+        const std::shared_ptr<SourceConnector> sourceConnector,
+        const std::shared_ptr<cppkafka::Consumer> consumer);
 
 
     static boost::intrusive_ptr<DocumentSource> createFromBson(
@@ -82,10 +81,8 @@ private:
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
         std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
         const BSONObj metadata,
-        const cppkafka::Configuration kafkaConfig,
-        const std::string kafkaTopic,
-        const std::string kafkaTopicFormat
-    );
+        const std::shared_ptr<SourceConnector> sourceConnector,
+        const std::shared_ptr<cppkafka::Consumer> consumer);
 
     std::unique_ptr<Pipeline, PipelineDeleter> _pipeline;
 
