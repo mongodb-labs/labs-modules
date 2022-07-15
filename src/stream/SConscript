@@ -133,40 +133,9 @@ env.Library(
 )
 
 env.Library(
-    target='document_source_random_delay',
-    source=[
-        'document_source_random_delay.cpp'
-    ],
-    LIBDEPS_PRIVATE= [
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
-
-)
-
-env.Library(
     target='document_source_simp_slide_window',
     source=[
         'document_source_simp_slide_window.cpp'
-    ],
-    LIBDEPS_PRIVATE= [
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
-)
-
-env.Library(
-    target='document_source_observe',
-    source=[
-        'document_source_observe.cpp'
     ],
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
