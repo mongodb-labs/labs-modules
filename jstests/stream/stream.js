@@ -1,6 +1,6 @@
 use config
 
-const streamName = 'streamFromTestv6'
+const streamName = 'testStream1'
 
 
 const agg = [
