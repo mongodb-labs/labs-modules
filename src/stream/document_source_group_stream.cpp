@@ -686,8 +686,9 @@ DocumentSourceGroupStream::initializeSelf(GetNextResult input) {
   case DocumentSource::GetNextResult::ReturnStatus::kAdvanced: {
     MONGO_UNREACHABLE; // We consumed all advances above.
   }
-  case DocumentSource::GetNextResult::ReturnStatus::kPauseExecution: {
-    return input; // Propagate pause.
+  case DocumentSource::GetNextResult::ReturnStatus::kPauseExecution:
+  case DocumentSource::GetNextResult::ReturnStatus::kShutdown: {
+    return input; // Propagate pause / shutdown.
   }
   case DocumentSource::GetNextResult::ReturnStatus::kPartial: {
     LOGV2(99999, "windowed");

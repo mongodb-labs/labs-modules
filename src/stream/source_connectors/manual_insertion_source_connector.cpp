@@ -11,7 +11,7 @@ ManualInsertionSourceConnector::ManualInsertionSourceConnector(const std::string
   // Setting source connector type
   _type = SourceConnector::Type::kManualInsertion;
 
-  std::unique_ptr<StreamListener> listener = std::make_unique<StreamListener>([this](DocumentSource::GetNextResult document) {
+  auto listener = std::make_unique<StreamListener>([this](DocumentSource::GetNextResult document) {
       stdx::lock_guard<Latch> lock(_mutex);
       _insertionQueue.push_back(std::move(document));
   });

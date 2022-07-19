@@ -4,8 +4,6 @@ Import('env')
 
 env = env.Clone()
 
-# TODO: Combine all libs into a single one
-
 env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = 1
 
 env.Append(LINKFLAGS=[
@@ -15,152 +13,28 @@ env.Append(LINKFLAGS=[
 env.SConscript(dirs=['source_connectors'], exports=['env'])
 
 env.Library(
-    target='stream_controller',
+    target='streams',
     source=[
-        'stream_controller.cpp'
-    ],
-    LIBDEPS_PRIVATE=[
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline'
-    ]
-)
-
-env.Library(
-    target='document_source_stream',
-    source=[
-        'document_source_stream.cpp'
-    ],
-    LIBDEPS_PRIVATE=[
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-
-        'document_source_in',
-        'document_source_stream_commit',
-        'document_source_stream_controller',
-        'source_connectors/change_stream_source_connector',
-        'source_connectors/kafka_source_connector',
-        'stream_controller',
+        'document_source_exp_window.cpp',
+        'document_source_group_stream.cpp',
+        'document_source_in.cpp',
+        'document_source_simp_slide_window.cpp',
+        'document_source_simp_time_window.cpp',
+        'document_source_stream.cpp',
+        'document_source_stream_commit.cpp',
+        'document_source_stream_controller.cpp',
+        'stream_controller.cpp',
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ],
-    SYSLIBDEPS=[
-        'cppkafka',
-    ],
-)
-
-env.Library(
-    target='document_source_in',
-    source=[
-        'document_source_in.cpp'
     ],
     LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/commands/stream_registry',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        'source_connectors/manual_insertion_source_connector'
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers'
-    ]
-)
-
-env.Library(
-    target='document_source_stream_controller',
-    source=[
-        'document_source_stream_controller.cpp'
-    ],
-    LIBDEPS_PRIVATE=[
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        'stream_controller'
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
-)
-
-env.Library(
-    target='document_source_stream_commit',
-    source=[
-        'document_source_stream_commit.cpp'
-    ],
-    LIBDEPS_PRIVATE=[
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ],
-    SYSLIBDEPS=[
-        'cppkafka',
-    ],
-)
-
-env.Library(
-    target='document_source_exp_window',
-    source=[
-        'document_source_exp_window.cpp'
-    ],
-    LIBDEPS_PRIVATE= [
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
-)
-
-env.Library(
-    target='document_source_simp_time_window',
-    source=[
-        'document_source_simp_time_window.cpp'
-    ],
-    LIBDEPS_PRIVATE= [
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
+        '$BUILD_DIR/mongo/db/sorter/sorter_idl',
         '$BUILD_DIR/mongo/util/periodic_runner',
         '$BUILD_DIR/mongo/util/periodic_runner_factory',
-
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
-)
-
-env.Library(
-    target='document_source_simp_slide_window',
-    source=[
-        'document_source_simp_slide_window.cpp'
-    ],
-    LIBDEPS_PRIVATE= [
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
-)
-
-env.Library(
-    target='document_source_group_stream',
-    source=[
-        'document_source_group_stream.cpp'
-    ],
-    LIBDEPS_PRIVATE= [
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-        '$BUILD_DIR/mongo/db/sorter/sorter_idl',
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
+        'source_connectors/source_connectors',
     ]
 )
