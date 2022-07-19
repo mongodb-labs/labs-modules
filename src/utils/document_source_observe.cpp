@@ -44,11 +44,11 @@ DocumentSource::GetNextResult DocumentSourceOb::doGetNext() {
     auto doc = res.releaseDocument();
     return Document({{"type", "kAdvanced"_sd}, {"data", doc}});
   }
+  case DocumentSource::GetNextResult::ReturnStatus::kEOF: {
+    return res;
+  }
   case DocumentSource::GetNextResult::ReturnStatus::kPauseExecution: {
     return Document({{"type", "kPauseExecution"_sd}});
-  }
-  case DocumentSource::GetNextResult::ReturnStatus::kUnblock: {
-    return Document({{"type", "kUnblock"_sd}});
   }
   case DocumentSource::GetNextResult::ReturnStatus::kPop: {
     return Document({{"type", "kPop"_sd}});
@@ -56,8 +56,11 @@ DocumentSource::GetNextResult DocumentSourceOb::doGetNext() {
   case DocumentSource::GetNextResult::ReturnStatus::kPartial: {
     return Document({{"type", "kPartial"_sd}});
   }
-  case DocumentSource::GetNextResult::ReturnStatus::kEOF: {
-    return res;
+  case DocumentSource::GetNextResult::ReturnStatus::kShutdown: {
+    return Document({{"type", "kShutdown"_sd}});
+  }
+  case DocumentSource::GetNextResult::ReturnStatus::kUnblock: {
+    return Document({{"type", "kUnblock"_sd}});
   }
   }
   MONGO_UNREACHABLE;
