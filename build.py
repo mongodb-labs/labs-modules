@@ -6,7 +6,8 @@ def configure(conf, env):
     root = os.path.dirname(__file__)
 
     modules = [
-        "external"
+        # "external",
+        "letpipe"
     ]
 
     env['MONGO_LABS_FEATURES'] = modules
