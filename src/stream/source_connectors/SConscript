@@ -5,51 +5,21 @@ Import('env')
 env = env.Clone()
 
 env.Library(
-    target='kafka_source_connector',
+    target='source_connectors',
     source=[
-        'kafka_source_connector.cpp'
-    ],
-    LIBDEPS_PRIVATE=[
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline'
-    ],
-    SYSLIBDEPS=[
-        'cppkafka',
-    ],
-)
-
-env.Library(
-    target='manual_insertion_source_connector',
-    source=[
-        'manual_insertion_source_connector.cpp'
-    ],
-    LIBDEPS_PRIVATE=[
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/commands/stream_registry',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline'
-    ]
-)
-
-env.Library(
-    target='change_stream_source_connector',
-    source=[
-        'change_stream_source_connector.cpp'
+        'change_stream_source_connector.cpp',
+        'kafka_source_connector.cpp',
+        'manual_insertion_source_connector.cpp',
     ],
     LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/commands/standalone',
+        '$BUILD_DIR/mongo/db/commands/stream_registry',
         '$BUILD_DIR/mongo/db/db_raii',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-    ]
+        '$BUILD_DIR/mongo/db/pipeline/pipeline'
+    ],
+    SYSLIBDEPS=[
+        'cppkafka',
+        'rdkafka',
+    ],
 )
-
-
-# env.Library(
-#     target='source_connector',
-#     source=[
-#         'source_connector.cpp'
-#     ],
-#     LIBDEPS_PRIVATE=[
-#         '$BUILD_DIR/mongo/base'
-#     ]
-# )
