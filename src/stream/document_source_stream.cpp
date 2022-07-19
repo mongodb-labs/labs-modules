@@ -54,8 +54,7 @@ DocumentSourceStream::DocumentSourceStream(
     const std::shared_ptr<cppkafka::Consumer> consumer)
     : DocumentSource(kStageName, pExpCtx),
     _pipeline(std::move(pipeline)),
-    _streamController(new StreamController())
-    {
+    _streamController(new StreamController()) {
       auto streamName = metadata.getField("name").str();
 
       // Insert $streamController as initial source
@@ -91,6 +90,12 @@ DocumentSource::GetNextResult DocumentSourceStream::doGetNext() {
 
   while (!pipelineEOF) {
     auto input = _pipeline->getSources().back()->getNext();
+
+    if (input.isShutdown()) {
+      // Shutdown means we can exit the aggregation pipeline
+      break;
+    }
+
     pipelineEOF = input.isEOF();
   }
 
