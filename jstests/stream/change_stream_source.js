@@ -1,6 +1,4 @@
-// Manual Insertion tests
-
-// Create Test stream
+// Change stream tests
 
 const agg = [
   {
@@ -23,14 +21,25 @@ const agg = [
   }
 ];
 
-db.createStream("testStream1", agg)
+assert.commandWorked(db.createStream("changeStreamSource", agg))
+assert.commandWorked(db.getSiblingDB("test")["input"].insert({"foo": "bar"}))
 
-db.getSiblingDB("test")["input"].insert({"_id": "x", "foo": "bar"})
+let count = 0
+let i = 0
 
-const result = db.getSiblingDB("test")["input"].find({"_id": "x"}).toArray()
+// Need to poll output collection
+while (i < 5) {
+  sleep(500)
+  count = db.getSiblingDB("test")["output"].count()
 
-assert.eq(result.length, 1);
+  if (count > 0) {
+    break
+  }
+
+  i++
+}
+
+assert.eq(count, 1);
+assert.eq(db.changeStreamSource.drop(), true)
 assert.eq(db.getSiblingDB("test")["input"].drop(), true)
 assert.eq(db.getSiblingDB("test")["output"].drop(), true)
-
-// TODO: Drop streams
