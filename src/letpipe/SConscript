@@ -4,10 +4,14 @@ Import('env')
 
 env = env.Clone()
 
+env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = 1
+
 env.Library(
-    target='document_source_letpipe',
+    target='mqlisp',
     source=[
-        'document_source_letpipe.cpp'
+        'document_source_letpipe.cpp',
+        'document_source_cond.cpp',
+        'document_source_expand.cpp',
     ],
     LIBDEPS_PRIVATE= [
         '$BUILD_DIR/mongo/base',
@@ -19,32 +23,3 @@ env.Library(
     ]
 )
 
-# env.Library(
-#     target='expression_quote',
-#     source=[
-#         'expression_quote.cpp'
-#     ],
-#     LIBDEPS_PRIVATE= [
-#         '$BUILD_DIR/mongo/base',
-#         '$BUILD_DIR/mongo/db/pipeline/pipeline',
-#     ],
-#     LIBDEPS_DEPENDENTS=[
-#         '$BUILD_DIR/mongo/db/mongod_initializers',
-#         '$BUILD_DIR/mongo/s/mongos_initializers',
-#     ]
-# )
-
-env.Library(
-    target='document_source_eval',
-    source=[
-        'document_source_eval.cpp'
-    ],
-    LIBDEPS_PRIVATE= [
-        '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/pipeline/pipeline',
-    ],
-    LIBDEPS_DEPENDENTS=[
-        '$BUILD_DIR/mongo/db/mongod_initializers',
-        '$BUILD_DIR/mongo/s/mongos_initializers',
-    ]
-)

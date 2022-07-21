@@ -21,7 +21,7 @@
 
 namespace mongo {
 
-class DocumentSourceEval final : public DocumentSource {
+class DocumentSourceExpand final : public DocumentSource {
 public:
   static constexpr StringData kStageName = "$eval"_sd;
 
@@ -50,7 +50,7 @@ public:
   }
 
 private:
-  explicit DocumentSourceEval(
+  explicit DocumentSourceExpand(
       const boost::intrusive_ptr<ExpressionContext> &expCtx,
       boost::intrusive_ptr<Expression> expr)
       : DocumentSource(kStageName, expCtx), _expr(std::move(expr)) {}

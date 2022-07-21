@@ -4,39 +4,27 @@
 
 #include "mongo/platform/basic.h"
 
-#include "document_source_eval.h"
+#include "document_source_expand.h"
 
 namespace mongo {
 
-REGISTER_DOCUMENT_SOURCE(eval, LiteParsedDocumentSourceDefault::parse,
-                         DocumentSourceEval::createFromBson,
+REGISTER_DOCUMENT_SOURCE(expand, LiteParsedDocumentSourceDefault::parse,
+                         DocumentSourceExpand::createFromBson,
                          AllowedWithApiStrict::kAlways);
 
-boost::intrusive_ptr<DocumentSource> DocumentSourceEval::createFromBson(
+boost::intrusive_ptr<DocumentSource> DocumentSourceExpand::createFromBson(
     BSONElement elem, const boost::intrusive_ptr<ExpressionContext> &expCtx) {
   LOGV2(99999999, "create from bson", "elem"_attr = elem);
-  if (elem.type() == BSONType::Object) {
-    auto expr = elem.Obj();
-    LOGV2(99999999, "expr extracted", "expr"_attr = expr);
-    boost::intrusive_ptr<DocumentSource> res(new DocumentSourceEval(
-        expCtx, Expression::parseObject(expCtx.get(), expr,
-                                        expCtx->variablesParseState)));
-    return res;
-  } else if (elem.type() == BSONType::String) {
-    auto var = elem.valueStringDataSafe();
-    boost::intrusive_ptr<Expression> expr(
-        new ExpressionConstant(expCtx.get(), Value(var)));
-    LOGV2(99999999, "expr extracted : ", "expr"_attr = expr->serialize(false));
-    boost::intrusive_ptr<DocumentSource> res(
-        new DocumentSourceEval(expCtx, expr));
-    return res;
-  }
-  uasserted(ErrorCodes::BadValue, "failed to parse $eval");
-  MONGO_UNREACHABLE;
+  auto expr =
+      Expression::parseOperand(expCtx.get(), elem, expCtx->variablesParseState);
+  boost::intrusive_ptr<DocumentSource> res(
+      new DocumentSourceExpand(expCtx, expr));
+
+  return res;
 }
 
 std::unique_ptr<Pipeline, PipelineDeleter>
-DocumentSourceEval::expandPipeline(const Document &doc) {
+DocumentSourceExpand::expandPipeline(const Document &doc) {
   auto pipeSpec = _expr->evaluate(doc, &pExpCtx->variables);
   LOGV2(99999999, "evaluated pipeline: ", "pipe"_attr = pipeSpec);
   uassert(99999, "pipeline spec in $eval must evaluates into an array",
@@ -54,7 +42,7 @@ DocumentSourceEval::expandPipeline(const Document &doc) {
   return pipe;
 }
 
-DocumentSource::GetNextResult DocumentSourceEval::doGetNext() {
+DocumentSource::GetNextResult DocumentSourceExpand::doGetNext() {
   auto next = pSource->getNext();
   if (!next.isAdvanced()) {
     return next;

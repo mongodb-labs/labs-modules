@@ -9,8 +9,26 @@ db.test.insert_many([{"k": x, "v": x % 2 == 0} for x in range(20)])
 pipeline = [
     {
         "$letp": {
-            "vars": {"foo": 100, "p": {"$const": [{"$project": {"_id": 0}}]}},
-            "pipeline": [{"$addFields": {"p": "$$p"}}, {"$eval": "$$p"}],
+            "vars": {"foo": 100},
+            "pipeline": [
+                {"$project": {"_id": 0}},
+                # {"$addFields": {"p": "$$p"}},
+                {
+                    "$expand": {
+                        "$switch": {
+                            "branches": [
+                                {
+                                    "case": "$v",
+                                    "then": {
+                                        "$const": [{"$addFields": {"foo": "foo"}}]
+                                    },
+                                }
+                            ],
+                            "default": {"$const": [{"$addFields": {"bar": "bar"}}]},
+                        }
+                    }
+                },
+            ],
         }
     }
 ]
