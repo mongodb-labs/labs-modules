@@ -5,14 +5,14 @@ Import("env has_option")
 Import("get_option")
 Import("http_client")
 
-feature_dirs = [
-    "external"
-]
+# feature_dirs = [
+#     "external"
+# ]
 
 env = env.Clone()
 
 env.InjectMongoIncludePaths()
-env.InjectModule("labs")
+env.InjectModule("labs-modules")
 
 # Code in the labs module follows the basic.h practices of the community repo.
 env.AppendUnique(

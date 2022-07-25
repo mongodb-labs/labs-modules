@@ -35,7 +35,7 @@
 #include "mongo/db/commands.h"
 #include "mongo/logv2/log.h"
 
-#include "mongo/db/modules/labs/src/external/registry/endpoint_commands_gen.h"
+#include "mongo/db/modules/labs-modules/src/external/registry/endpoint_commands_gen.h"
 #include "endpoint.h"
 #include "registry.h"
 
