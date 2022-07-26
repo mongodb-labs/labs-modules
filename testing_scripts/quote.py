@@ -12,7 +12,6 @@ pipeline = [
             "vars": {"foo": 100},
             "pipeline": [
                 {"$project": {"_id": 0}},
-                # {"$addFields": {"p": "$$p"}},
                 {
                     "$expand": {
                         "$switch": {
