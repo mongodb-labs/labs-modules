@@ -6,31 +6,22 @@ env = env.Clone()
 
 env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = 1
 
-env.Append(LINKFLAGS=[
-    '-Wl,-rpath,/usr/lib'
-])
-
-env.SConscript(dirs=['source_connectors'], exports=['env'])
-
 env.Library(
-    target='streams',
+    target='windowing',
     source=[
-        'document_source_in.cpp',
-        'document_source_stream.cpp',
-        'document_source_stream_commit.cpp',
-        'document_source_stream_controller.cpp',
-        'stream_controller.cpp',
+        'document_source_exp_window.cpp',
+        'document_source_group_stream.cpp',
+        'document_source_simp_slide_window.cpp',
+        'document_source_simp_time_window.cpp',
     ],
     LIBDEPS_DEPENDENTS=[
         '$BUILD_DIR/mongo/db/mongod_initializers',
     ],
     LIBDEPS_PRIVATE=[
         '$BUILD_DIR/mongo/base',
-        '$BUILD_DIR/mongo/db/commands/stream_registry',
         '$BUILD_DIR/mongo/db/pipeline/pipeline',
         '$BUILD_DIR/mongo/db/sorter/sorter_idl',
         '$BUILD_DIR/mongo/util/periodic_runner',
         '$BUILD_DIR/mongo/util/periodic_runner_factory',
-        'source_connectors/source_connectors',
     ]
 )
