@@ -27,7 +27,7 @@ public:
   const char *getSourceName() const final { return kStageName.rawData(); }
 
   Value serialize(boost::optional<explain::VerbosityEnum> explain) const {
-    return Value(Document{{"$_singleDocSrc", _doc}});
+    return Value(Document{{"$_docPause", _doc}});
   }
 
   DocPause(const boost::intrusive_ptr<ExpressionContext> &expCtx,
@@ -38,6 +38,7 @@ public:
     if (_consumed) {
       return DocumentSource::GetNextResult::makePauseExecution();
     }
+    _consumed = true;
     return std::move(_doc);
   }
 

@@ -65,7 +65,9 @@ REGISTER_DOCUMENT_SOURCE(groups, LiteParsedDocumentSourceDefault::parse,
                          AllowedWithApiStrict::kAlways);
 
 DocumentSource::GetNextResult DocumentSourceGroupStream::doGetNext() {
+  LOGV2(99999, "groups getnext");
   if (_windowed) {
+    LOGV2(99999, "groups is windowed");
     if (_windowChanged) {
       mergeStates();
     }
@@ -87,33 +89,43 @@ DocumentSource::GetNextResult DocumentSourceGroupStream::doGetNext() {
     LOGV2(99999, "Returning _mergerStage res");
     return res;
   } else {
+    LOGV2(99999, "groups is not windowed");
     auto next = pSource->getNext();
+    while (next.isAdvanced()) {
+      auto doc = next.releaseDocument();
+      LOGV2(99999, "psource next: ", "next"_attr = doc);
+      _innerGroups.front()->setSource(new DocPause(pExpCtx, doc));
+      _innerGroups.front()->getNext();
+      _windowChanged = true;
+      LOGV2(99999, "updating next: ");
+      next = pSource->getNext();
+    }
     switch (next.getStatus()) {
     case DocumentSource::GetNextResult::ReturnStatus::kAdvanced: {
-      auto doc = next.releaseDocument();
-      _innerGroups.front()->setSource(new DocPause(pExpCtx, doc));
-      auto n = _innerGroups.front()->getNext();
-      invariant(n.isPaused());
-      _windowChanged = true;
-      return n;
+      MONGO_UNREACHABLE;
     }
     case DocumentSource::GetNextResult::ReturnStatus::kPop: {
+      LOGV2(99999, "groups pop");
       _innerGroups.pop_back();
       _windowChanged = true;
       return DocumentSource::GetNextResult::makePauseExecution();
     }
     case DocumentSource::GetNextResult::ReturnStatus::kPartial: {
+      LOGV2(99999, "groups partial");
       _innerGroups.push_front(
           DocumentSourceGroup::createFromBson(_spec, pExpCtx));
       return DocumentSource::GetNextResult::makePauseExecution();
     }
     case DocumentSource::GetNextResult::ReturnStatus::kEOF: {
+      LOGV2(99999, "groups eof");
       _eof = true;
       [[fallthrough]];
     }
     case DocumentSource::GetNextResult::ReturnStatus::kUnblock: {
+      LOGV2(99999, "groups unblock");
       _windowed = true;
-      return next;
+      // return next;
+      return DocumentSource::GetNextResult::makePauseExecution();
     }
     default: {
       return next;
@@ -166,6 +178,7 @@ void DocumentSourceGroupStream::mergeStates() {
   auto d = _innerGroups.front()->distributedPlanLogic();
   boost::intrusive_ptr<DocumentSource> merger = (*d).mergingStages.front();
   for (auto &grp : _innerGroups) {
+    grp->setSource(new MkEOF(pExpCtx));
     auto next = grp->getNext();
     while (!next.isEOF()) {
       if (!next.isAdvanced()) {
