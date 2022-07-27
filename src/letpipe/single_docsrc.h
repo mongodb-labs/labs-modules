@@ -53,6 +53,7 @@ public:
     if (_consumed) {
       return DocumentSource::GetNextResult::makeEOF();
     }
+    _consumed = true;
     return std::move(_doc);
   }
 
