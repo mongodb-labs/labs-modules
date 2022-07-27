@@ -180,11 +180,7 @@ void DocumentSourceGroupStream::mergeStates() {
   for (auto &grp : _innerGroups) {
     grp->setSource(new MkEOF(pExpCtx));
     auto next = grp->getNext();
-    while (!next.isEOF()) {
-      if (!next.isAdvanced()) {
-        next = grp->getNext();
-        continue;
-      }
+    while (next.isAdvanced()) {
       auto doc = next.releaseDocument();
       merger->setSource(new DocPause(pExpCtx, doc));
       merger->getNext();
