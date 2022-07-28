@@ -51,6 +51,10 @@ public:
         const std::shared_ptr<cppkafka::Consumer> consumer);
 
 
+    ~DocumentSourceStream() {
+        _cleanUp();
+    };
+
     static boost::intrusive_ptr<DocumentSource> createFromBson(
         BSONElement elem, const boost::intrusive_ptr<ExpressionContext>& pExpCtx);
 
@@ -84,11 +88,21 @@ private:
         const std::shared_ptr<SourceConnector> sourceConnector,
         const std::shared_ptr<cppkafka::Consumer> consumer);
 
+    // NamespaceString _getCappedCollNamespaceString();
+
+    void _cleanUp();
+
+    void _createCappedCollection(OperationContext* opCtx, const NamespaceString nss);
+
+    void _dropCappedCollection(OperationContext* opCtx, const NamespaceString nss);
+
     std::unique_ptr<Pipeline, PipelineDeleter> _pipeline;
 
     boost::intrusive_ptr<StreamController> _streamController;
 
     std::shared_ptr<cppkafka::Consumer> _consumer;
+
+    std::string _streamName;
 
     GetNextResult doGetNext() final;
 };

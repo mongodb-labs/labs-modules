@@ -28,11 +28,15 @@
  */
 
 #define MONGO_LOGV2_DEFAULT_COMPONENT ::mongo::logv2::LogComponent::kDefault
-
+#include <cmath>
 #include <boost/algorithm/string.hpp>
 #include <boost/intrusive_ptr.hpp>
 
 #include "mongo/bson/json.h"
+#include "mongo/db/catalog/create_collection.h"
+#include "mongo/db/catalog/drop_collection.h"
+#include "mongo/db/drop_gen.h"
+#include "mongo/db/pipeline/document_source_merge.h"
 #include "mongo/logv2/log.h"
 #include "mongo/platform/basic.h"
 
@@ -46,6 +50,13 @@
 
 namespace mongo {
 
+namespace {
+NamespaceString getCappedCollNamespaceString(StringData streamName) {
+    boost::optional<TenantId> tenantId;
+    return NamespaceString(tenantId, "stream-logs", "temp-" + streamName);
+}
+}
+
 DocumentSourceStream::DocumentSourceStream(
     const boost::intrusive_ptr<ExpressionContext> &pExpCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
@@ -54,15 +65,29 @@ DocumentSourceStream::DocumentSourceStream(
     const std::shared_ptr<cppkafka::Consumer> consumer)
     : DocumentSource(kStageName, pExpCtx),
     _pipeline(std::move(pipeline)),
-    _streamController(new StreamController()) {
-      auto streamName = metadata.getField("name").str();
+    _streamController(new StreamController()),
+    _streamName(metadata.getField("name").str()) {
 
       // Insert $streamController as initial source
       _streamController->setSource(DocumentSourceIn::create(
-          pExpCtx, sourceConnector, streamName));
+          pExpCtx, sourceConnector, _streamName));
 
       _pipeline->addInitialSource(
           DocumentSourceStreamController::create(pExpCtx, _streamController));
+
+      auto cappedCollNss = getCappedCollNamespaceString(_streamName);
+
+      BSONObj implicitCappedCollMerge = BSON("$merge" <<
+                                          BSON("into" <<
+                                          BSON("db" << cappedCollNss.db() <<
+                                              "coll" << cappedCollNss.coll())));
+
+      _createCappedCollection(pExpCtx->opCtx, cappedCollNss);
+
+      // Add default $out to a capped collection
+      _pipeline->addFinalSource(
+            DocumentSourceMerge::createFromBson(implicitCappedCollMerge.firstElement(), pExpCtx));
+
 
       /*
       * Add $streamCommit to end
@@ -84,6 +109,37 @@ DocumentSourceStream::DocumentSourceStream(
 REGISTER_DOCUMENT_SOURCE(stream, LiteParsedDocumentSourceDefault::parse,
                          DocumentSourceStream::createFromBson,
                          AllowedWithApiStrict::kAlways);
+
+
+void DocumentSourceStream::_createCappedCollection(OperationContext* opCtx, const NamespaceString nss) {
+  auto catalog = CollectionCatalog::get(opCtx);
+
+  // Create capped collection if it doesn't currently exist
+  if (!catalog->lookupCollectionByNamespace(opCtx, nss)) {
+    uassertStatusOK(
+        createCollection(opCtx, nss.db().toString(), BSON("create" << nss.coll() << "capped" << true << "size" << pow(2, 22))));
+  }
+}
+
+void DocumentSourceStream::_dropCappedCollection(OperationContext* opCtx, const NamespaceString nss) {
+  auto catalog = CollectionCatalog::get(opCtx);
+
+  // Drop capped collection if it exists
+  if (catalog->lookupCollectionByNamespace(opCtx, nss)) {
+    DropReply reply;
+    uassertStatusOK(
+        dropCollection(opCtx,
+                      nss,
+                      &reply,
+                      DropCollectionSystemCollectionMode::kDisallowSystemCollectionDrops));
+  }
+}
+
+void DocumentSourceStream::_cleanUp() {
+  if (!_streamName.empty()) {
+    _dropCappedCollection(pExpCtx->opCtx, getCappedCollNamespaceString(_streamName));
+  }
+}
 
 DocumentSource::GetNextResult DocumentSourceStream::doGetNext() {
   bool pipelineEOF = false;
@@ -161,47 +217,54 @@ boost::intrusive_ptr<DocumentSource> DocumentSourceStream::createFromBson(
 
     if (embeddedObject.hasField("$in")) {
       BSONElement inArgElem = subPipeElem.Obj().getField("$in");
-      BSONObj argObj = inArgElem.Obj();
 
-      if (argObj.hasField("db") && argObj.hasField("coll")) {
-        std::string db = argObj.getField("db").str();
-        std::string coll = argObj.getField("coll").str();
+      if(inArgElem.type() == BSONType::String) {
+        auto sourceStreamNss = getCappedCollNamespaceString(inArgElem.valueStringData());
 
-        sourceConnector = std::make_shared<ChangeStreamSourceConnector>(pExpCtx, db, coll);
-      } else if (argObj.hasField("connectionConfig")) {
+        sourceConnector = std::make_shared<ChangeStreamSourceConnector>(pExpCtx, sourceStreamNss.db().toString(), sourceStreamNss.coll().toString());
+      } else if (inArgElem.type() == BSONType::Object) {
+        BSONObj argObj = inArgElem.Obj();
 
-        auto connectionConfig = argObj.getField("connectionConfig");
+        if (argObj.hasField("db") && argObj.hasField("coll")) {
+          std::string db = argObj.getField("db").str();
+          std::string coll = argObj.getField("coll").str();
 
-        uassert(100029201,
-                str::stream() << "The connectionConfig argument to $stream must "
-                                "be an object, but found type: "
-                              << typeName(elem.type()),
-                connectionConfig.type() == BSONType::Object);
+          sourceConnector = std::make_shared<ChangeStreamSourceConnector>(pExpCtx, db, coll);
+        } else if (argObj.hasField("connectionConfig")) {
 
-        auto connectionConfigObj = connectionConfig.Obj();
+          auto connectionConfig = argObj.getField("connectionConfig");
 
-        // TODO: Need to do additional input validation for each of these steps.
-        auto bootstrapServer =
-            connectionConfigObj.getField("bootstrapServer").str();
-        auto streamUUID = metadataObj.getField("id").str();
-        std::string kafkaTopic = connectionConfigObj.getField("topic").str();
-        std::string kafkaTopicFormat = connectionConfigObj.getField("format").str();
+          uassert(100029201,
+                  str::stream() << "The connectionConfig argument to $stream must "
+                                  "be an object, but found type: "
+                                << typeName(elem.type()),
+                  connectionConfig.type() == BSONType::Object);
 
-        LOGV2(999999, "streamUUID", "streamUUID"_attr=streamUUID);
+          auto connectionConfigObj = connectionConfig.Obj();
 
-        uassert(999999,
-            str::stream() << "required bootstrapServer or kafkaTopic field not set.",
-            (!bootstrapServer.empty() && !kafkaTopic.empty()));
+          // TODO: Need to do additional input validation for each of these steps.
+          auto bootstrapServer =
+              connectionConfigObj.getField("bootstrapServer").str();
+          auto streamUUID = metadataObj.getField("id").str();
+          std::string kafkaTopic = connectionConfigObj.getField("topic").str();
+          std::string kafkaTopicFormat = connectionConfigObj.getField("format").str();
 
-        cppkafka::Configuration kafkaConfig = {{"bootstrap.servers", bootstrapServer},
-                      // Change to catalog UUID once we have this
-                      {"group.id", streamUUID},
-                      // Disable auto commit
-                      {"enable.auto.commit", false},
-                      {"auto.offset.reset", "beginning"}};
+          LOGV2(999999, "streamUUID", "streamUUID"_attr=streamUUID);
 
-        kafkaConsumer = std::make_shared<cppkafka::Consumer>(kafkaConfig);
-        sourceConnector = std::make_shared<KafkaSourceConnector>(kafkaConsumer, kafkaTopic);
+          uassert(999999,
+              str::stream() << "required bootstrapServer or kafkaTopic field not set.",
+              (!bootstrapServer.empty() && !kafkaTopic.empty()));
+
+          cppkafka::Configuration kafkaConfig = {{"bootstrap.servers", bootstrapServer},
+                        // Change to catalog UUID once we have this
+                        {"group.id", streamUUID},
+                        // Disable auto commit
+                        {"enable.auto.commit", false},
+                        {"auto.offset.reset", "beginning"}};
+
+          kafkaConsumer = std::make_shared<cppkafka::Consumer>(kafkaConfig);
+          sourceConnector = std::make_shared<KafkaSourceConnector>(kafkaConsumer, kafkaTopic);
+        }
       }
     } else {
       // Do not insert $in as it will be added in manually

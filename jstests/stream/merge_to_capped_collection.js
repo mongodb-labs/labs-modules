@@ -21,25 +21,28 @@ const agg = [
   }
 ];
 
-assert.commandWorked(db.createStream("changeStreamSource", agg))
+assert.commandWorked(db.createStream("mergeCappedCollection", agg))
 assert.commandWorked(db.getSiblingDB("test")["input"].insert({"foo": "bar"}))
 
-let count = 0
+let countOutput = 0
+let countCapped = 0
 let i = 0
 
 // Need to poll output collection
 while (i < 5) {
   sleep(500)
-  count = db.getSiblingDB("test")["output"].count()
+  countOutput = db.getSiblingDB("test")["output"].count()
+  countCapped = db.getSiblingDB("stream-logs")["temp-mergeCappedCollection"].count()
 
-  if (count > 0) {
+  if (countOutput > 0 && countCapped > 0) {
     break
   }
 
   i++
 }
 
-assert.eq(count, 1);
+assert.eq(countOutput, 1);
+assert.eq(countCapped, 1);
 assert.eq(db.getSiblingDB("test")["input"].drop(), true)
 assert.eq(db.getSiblingDB("test")["output"].drop(), true)
-assert.eq(db.changeStreamSource.drop(), true)
+assert.eq(db.mergeCappedCollection.drop(), true)

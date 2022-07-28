@@ -21,3 +21,5 @@ assert.commandWorked(db.createStream("testStream", agg))
 // Drop stream
 assert.eq(db.testStream.drop(), true)
 assert.eq(db.testStream.drop(), false)
+
+// TODO: check the underlying catalog to confirm
