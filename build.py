@@ -8,7 +8,7 @@ def configure(conf, env):
 
     modules = [
         #        "external",
-        "stream",
+        "windowing",
         "utils",
     ]
 
