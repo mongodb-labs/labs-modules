@@ -12,47 +12,21 @@ const streamName = 'streamG'
 // {  "author" : "ty", "score" : 95, "views" : 1000 }
 
 const agg = [
-  {
-    $stream: [
-      {
+    {
         $in: {
-          connector: "kafka",
-          name: "kafkaUserBehavior",
-          connectionConfig: {
-            bootstrapServer: "localhost:9092",
-            topic: "json-sample",
-            format: "json", // or text
-          }
+            connector: "kafka",
+            name: "kafkaUserBehavior",
+            connectionConfig: {
+                bootstrapServer: "localhost:9092",
+                topic: "json-sample",
+                format: "json",  // or text
+            }
         }
-      },
-      {
-        $match: {
-          author : "dave"
-        }
-      },
-      {
-        $addFields: {
-          multipleScoreViews: {
-            $multiply: [ "$score", "$views" ]
-          }
-        }
-      },
-      {
-        $project: {
-          author: 1,
-          multipleScoreViews: 1
-        }
-      },
-      {
-        $merge: {
-          into: {
-            db: "output",
-            coll: "test"
-          }
-        }
-      }
-    ]
-  }
+    },
+    {$match: {author: "dave"}},
+    {$addFields: {multipleScoreViews: {$multiply: ["$score", "$views"]}}},
+    {$project: {author: 1, multipleScoreViews: 1}},
+    {$merge: {into: {db: "output", coll: "test"}}}
 ];
 
 db.createStream(streamName, agg)

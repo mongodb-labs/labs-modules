@@ -1,24 +1,8 @@
 // Change stream tests
 
 const agg = [
-  {
-    $stream: [
-      {
-        $in: {
-          db: "test",
-          coll: "input"
-        }
-      },
-      {
-        $merge: {
-          into: {
-            db: "test",
-            coll: "output"
-          }
-        }
-      }
-    ]
-  }
+    {$in: {db: "test", coll: "input"}},
+    {$merge: {into: {db: "test", coll: "output"}}},
 ];
 
 assert.commandWorked(db.createStream("changeStreamSource", agg))
@@ -29,14 +13,14 @@ let i = 0
 
 // Need to poll output collection
 while (i < 5) {
-  sleep(500)
-  count = db.getSiblingDB("test")["output"].count()
+    sleep(500)
+    count = db.getSiblingDB("test")["output"].count()
 
-  if (count > 0) {
-    break
-  }
+    if (count > 0) {
+        break
+    }
 
-  i++
+    i++
 }
 
 assert.eq(count, 1);
