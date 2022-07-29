@@ -1,18 +1,7 @@
 // Manual insertion tests
 
 const agg = [
-  {
-    $stream: [
-      {
-        $merge: {
-          into: {
-            db: "test",
-            coll: "manual-insertion"
-          }
-        }
-      }
-    ]
-  }
+    {$merge: {into: {db: "test", coll: "manual-insertion"}}},
 ];
 
 assert.commandWorked(db.createStream("manualInsertionStream", agg))
@@ -24,14 +13,14 @@ let i = 0
 
 // Need to poll output collection
 while (i < 5) {
-  sleep(500)
-  count = db.getSiblingDB("test")["manual-insertion"].count()
+    sleep(500)
+    count = db.getSiblingDB("test")["manual-insertion"].count()
 
-  if (count > 0) {
-    break
-  }
+    if (count > 0) {
+        break
+    }
 
-  i++
+    i++
 }
 
 assert.eq(count, 1);

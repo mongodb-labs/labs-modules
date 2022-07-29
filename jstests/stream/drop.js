@@ -1,18 +1,7 @@
 // Drop stream tests
 
 const agg = [
-  {
-    $stream: [
-      {
-        $merge: {
-          into: {
-            db: "test",
-            coll: "test"
-          }
-        }
-      }
-    ]
-  }
+    {$merge: {into: {db: "test", coll: "test"}}},
 ];
 
 // Create stream
