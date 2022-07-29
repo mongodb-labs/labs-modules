@@ -1,8 +1,3 @@
-use config
-
-const streamName = 'testStream1'
-
-
 const agg = [
   {
     $stream: [
@@ -35,13 +30,5 @@ const agg = [
   }
 ];
 
-db.createStream(streamName, agg)
-
-// use config
-db.system.streams.find()
-
-// show collections
-
-// db.collection.aggregate(agg)
-
-// db.test.find()
+assert.commandWorked(db.createStream("testStream1", agg))
+assert.eq(db.testStream1.drop(), true)
