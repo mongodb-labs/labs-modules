@@ -1,5 +1,3 @@
-use config
-
 const streamName = 'testStream1'
 
 const agg = [
